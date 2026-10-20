@@ -167,13 +167,21 @@ fn import_page(status: &gtk::Label) -> gtk::Box {
 fn reminders_page(status: &gtk::Label) -> gtk::Box {
     let page = page("Напоминания");
     let reminders = RefCell::new(Vec::<Reminder>::new());
+
     let form = column(16);
     form.add_css_class("panel");
+
     let title = field(&form, "Название", "Что нужно сделать");
     let date = field(&form, "Дата", "ДД.ММ.ГГГГ");
     let time = field(&form, "Время", "ЧЧ:ММ");
     let button = primary("Добавить напоминание");
+
+    let list = column(16);
+    render_reminders(&list, &[]);
+    
+    let list_for_button = list.clone();
     let status = status.clone();
+
     button.connect_clicked(move |_| {
         on_add_reminder(
             title.text().as_str(),
@@ -182,12 +190,49 @@ fn reminders_page(status: &gtk::Label) -> gtk::Box {
             &status,
             &reminders,
         );
+        
+
+        render_reminders(&list_for_button, &reminders.borrow());
     });
+    
     form.append(&button);
     page.append(&form);
-    page.append(&text("Нет напоминаний", "muted"));
+    page.append(&list);
     page
+
 }
+
+//отображение напоминаний
+fn render_reminders(list: &gtk::Box, reminders: &[Reminder]) {
+
+    while let Some(child) = list.first_child() {
+        list.remove(&child);
+    }
+
+    if reminders.is_empty() {
+        list.append(&text("Нету напоминаний", "muted"));
+        return;
+    } 
+
+    for reminder in reminders {
+        let row = column(6);
+        row.add_css_class("panel");
+
+        row.append(&text(&reminder.title, "section"));
+
+        let when = format!(
+            "{} в {}",
+            reminder.date.format("%d.%m.%Y"),
+            reminder.time.format("%H:%M"),
+        );
+    
+    row.append(&text(&when, "muted"));
+    list.append(&row);
+        
+    }
+
+}
+
 
 fn settings_page(status: &gtk::Label) -> gtk::Box {
     let page = page("Настройки");
