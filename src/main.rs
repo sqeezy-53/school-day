@@ -216,6 +216,14 @@ fn on_add_reminder(title: &str, date: &str, time: &str, status: &gtk::Label) {
         }
      };
 
+    let time = match chrono::NaiveTime::parse_from_str(time.trim(), "%H:%M") {
+        Ok(parsed_time) => parsed_time,
+        Err(_) => {
+            notify(status, "Введите время");
+            return;
+        }
+     };
+
     let _ = (date, time);
     notify(status, "Сохранение напоминаний не сделано")
 
