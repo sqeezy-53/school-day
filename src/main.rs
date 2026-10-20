@@ -1,5 +1,11 @@
 use adw::prelude::*;
 
+struct Reminder {
+    title: String,
+    date: chrono::NaiveDate,
+    time: chrono::NaiveTime,
+}
+
 // Только оформление. Обработчики для твоей логики находятся ниже страниц.
 const CSS: &str = r#"
 window { background: #222225; color: #dedee1; }
@@ -224,9 +230,19 @@ fn on_add_reminder(title: &str, date: &str, time: &str, status: &gtk::Label) {
         }
      };
 
-    let _ = (date, time);
-    notify(status, "Сохранение напоминаний не сделано")
+    let reminder = Reminder {
+        title: title.to_string(),
+        date,
+        time,
+     };
 
+    let message = format!(
+        "{} - {} в {}. Сохранение не сделано.",
+        reminder.title,
+        reminder.date.format("%d.%m.%Y"),
+        reminder.time.format("%H:%M"),
+    );
+    notify(status, &message);
 }
 
 fn on_save_settings(class: &str, status: &gtk::Label) {
