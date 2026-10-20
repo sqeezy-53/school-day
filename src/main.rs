@@ -192,10 +192,7 @@ fn settings_page(status: &gtk::Label) -> gtk::Box {
     page.append(&form);
     page
 }
-
-// ТВОЯ ЛОГИКА. Пока действия возвращают сообщение, а не притворяются успешными.
 fn on_add_lesson(status: &gtk::Label) {
-    // Создай struct Lesson, форму ввода и добавление в Vec<Lesson>.
     notify(status, "Добавление уроков пока недоступно.");
 }
 
@@ -205,21 +202,20 @@ fn on_import_photo(status: &gtk::Label) {
 }
 
 fn on_add_reminder(title: &str, date: &str, time: &str, status: &gtk::Label) {
-    // Проверь пустой title, разбери дату и время через chrono, создай Reminder.
-    let _ = (title, date, time);
-    notify(
-        status,
-        "Не удалось добавить напоминание: функция пока недоступна.",
-    );
+    let title = title.trim();
+     if title.is_empty() {
+         notify(status, "Введите название напоминания");
+         return;
+     }
+
+    let _ = (date, time);
+    notify(status, "Сохранение напоминаний не сделано")
+
 }
 
 fn on_save_settings(class: &str, status: &gtk::Label) {
-    // Проверь класс и запиши Settings в JSON. Затем подключи загрузку при запуске.
     let _ = class;
-    notify(
-        status,
-        "Не удалось сохранить настройки: функция пока недоступна.",
-    );
+    notify(status, "Сохранение напоминаний пока не сделано")
 }
 
 // ПОМОЩНИКИ ОФОРМЛЕНИЯ: повторяющиеся элементы собраны в короткие функции.
