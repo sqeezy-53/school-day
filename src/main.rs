@@ -207,6 +207,14 @@ fn on_add_reminder(title: &str, date: &str, time: &str, status: &gtk::Label) {
          notify(status, "Введите название напоминания");
          return;
      }
+    
+    let date = match chrono::NaiveDate::parse_from_str(date.trim(), "%d.%m.%Y") {
+        Ok(parsed_date) => parsed_date,
+        Err(_) => {
+            notify(status, "Введите существующую дату");
+            return;
+        }
+     };
 
     let _ = (date, time);
     notify(status, "Сохранение напоминаний не сделано")
