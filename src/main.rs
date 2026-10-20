@@ -1,4 +1,5 @@
 use adw::prelude::*;
+use std::cell::RefCell;
 
 struct Reminder {
     title: String,
@@ -6,7 +7,7 @@ struct Reminder {
     time: chrono::NaiveTime,
 }
 
-// Только оформление. Обработчики для твоей логики находятся ниже страниц.
+// оформление
 const CSS: &str = r#"
 window { background: #222225; color: #dedee1; }
 headerbar { background: #28282b; box-shadow: none; border-bottom: 1px solid #303033; min-height: 48px; }
@@ -165,6 +166,7 @@ fn import_page(status: &gtk::Label) -> gtk::Box {
 
 fn reminders_page(status: &gtk::Label) -> gtk::Box {
     let page = page("Напоминания");
+    let reminders = RefCell::new(Vec::<Reminder>::new());
     let form = column(16);
     form.add_css_class("panel");
     let title = field(&form, "Название", "Что нужно сделать");
@@ -178,6 +180,7 @@ fn reminders_page(status: &gtk::Label) -> gtk::Box {
             date.text().as_str(),
             time.text().as_str(),
             &status,
+            &reminders,
         );
     });
     form.append(&button);
@@ -207,7 +210,7 @@ fn on_import_photo(status: &gtk::Label) {
     notify(status, "Импорт фотографий пока недоступен.");
 }
 
-fn on_add_reminder(title: &str, date: &str, time: &str, status: &gtk::Label) {
+fn on_add_reminder(title: &str, date: &str, time: &str, status: &gtk::Label, reminders: &RefCell<Vec<Reminder>>,) {
     let title = title.trim();
      if title.is_empty() {
          notify(status, "Введите название напоминания");
@@ -242,6 +245,7 @@ fn on_add_reminder(title: &str, date: &str, time: &str, status: &gtk::Label) {
         reminder.date.format("%d.%m.%Y"),
         reminder.time.format("%H:%M"),
     );
+    reminders.borrow_mut().push(reminder);
     notify(status, &message);
 }
 
