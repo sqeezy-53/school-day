@@ -1,10 +1,12 @@
 use adw::prelude::*;
 use std::cell::RefCell;
+use std::rc::Rc;
 
 struct Reminder {
     title: String,
     date: chrono::NaiveDate,
     time: chrono::NaiveTime,
+    completed: bool,
 }
 
 // оформление
@@ -166,7 +168,7 @@ fn import_page(status: &gtk::Label) -> gtk::Box {
 
 fn reminders_page(status: &gtk::Label) -> gtk::Box {
     let page = page("Напоминания");
-    let reminders = RefCell::new(Vec::<Reminder>::new());
+    let reminders = Rc::new(RefCell::new(Vec::<Reminder>::new()));
 
     let form = column(16);
     form.add_css_class("panel");
@@ -177,8 +179,8 @@ fn reminders_page(status: &gtk::Label) -> gtk::Box {
     let button = primary("Добавить напоминание");
 
     let list = column(16);
-    render_reminders(&list, &[]);
-    
+    render_reminders(&list, &reminders);
+
     let list_for_button = list.clone();
     let status = status.clone();
 
@@ -190,49 +192,63 @@ fn reminders_page(status: &gtk::Label) -> gtk::Box {
             &status,
             &reminders,
         );
-        
 
-        render_reminders(&list_for_button, &reminders.borrow());
+        render_reminders(&list_for_button, &reminders);
     });
-    
+
     form.append(&button);
     page.append(&form);
     page.append(&list);
     page
-
 }
 
 //отображение напоминаний
-fn render_reminders(list: &gtk::Box, reminders: &[Reminder]) {
-
+fn render_reminders(list: &gtk::Box, reminders: &Rc<RefCell<Vec<Reminder>>>) {
     while let Some(child) = list.first_child() {
         list.remove(&child);
     }
 
-    if reminders.is_empty() {
+    let items = reminders.borrow();
+
+    if items.is_empty() {
         list.append(&text("Нету напоминаний", "muted"));
         return;
-    } 
+    }
 
-    for reminder in reminders {
-        let row = column(6);
+    for (index, reminder) in items.iter().enumerate() {
+        let row = gtk::Box::new(gtk::Orientation::Horizontal, 12);
         row.add_css_class("panel");
+        let checkbox = gtk::CheckButton::new();
+        checkbox.set_valign(gtk::Align::Start);
+        checkbox.set_active(reminder.completed);
 
-        row.append(&text(&reminder.title, "section"));
+        let details = column(6);
+        details.set_hexpand(true);
+
+        details.append(&text(&reminder.title, "section"));
 
         let when = format!(
             "{} в {}",
             reminder.date.format("%d.%m.%Y"),
             reminder.time.format("%H:%M"),
         );
-    
-    row.append(&text(&when, "muted"));
-    list.append(&row);
-        
+
+        details.append(&text(&when, "muted"));
+
+        // Каждая галочка хранит ссылку на общий список и номер своего напоминания.
+        let reminders_for_checkbox = Rc::clone(reminders);
+        checkbox.connect_toggled(move |checkbox| {
+            let mut items = reminders_for_checkbox.borrow_mut();
+            if let Some(reminder) = items.get_mut(index) {
+                reminder.completed = checkbox.is_active();
+            }
+        });
+
+        row.append(&checkbox);
+        row.append(&details);
+        list.append(&row);
     }
-
 }
-
 
 fn settings_page(status: &gtk::Label) -> gtk::Box {
     let page = page("Настройки");
@@ -255,20 +271,26 @@ fn on_import_photo(status: &gtk::Label) {
     notify(status, "Импорт фотографий пока недоступен.");
 }
 
-fn on_add_reminder(title: &str, date: &str, time: &str, status: &gtk::Label, reminders: &RefCell<Vec<Reminder>>,) {
+fn on_add_reminder(
+    title: &str,
+    date: &str,
+    time: &str,
+    status: &gtk::Label,
+    reminders: &RefCell<Vec<Reminder>>,
+) {
     let title = title.trim();
-     if title.is_empty() {
-         notify(status, "Введите название напоминания");
-         return;
-     }
-    
+    if title.is_empty() {
+        notify(status, "Введите название напоминания");
+        return;
+    }
+
     let date = match chrono::NaiveDate::parse_from_str(date.trim(), "%d.%m.%Y") {
         Ok(parsed_date) => parsed_date,
         Err(_) => {
             notify(status, "Введите существующую дату");
             return;
         }
-     };
+    };
 
     let time = match chrono::NaiveTime::parse_from_str(time.trim(), "%H:%M") {
         Ok(parsed_time) => parsed_time,
@@ -276,13 +298,27 @@ fn on_add_reminder(title: &str, date: &str, time: &str, status: &gtk::Label, rem
             notify(status, "Введите время");
             return;
         }
-     };
+    };
+
+    //запрет дубля
+
+    let exists = reminders.borrow().iter().any(|reminder| {
+        reminder.title.to_lowercase() == title.to_lowercase()
+            && reminder.date == date
+            && reminder.time == time
+    });
+
+    if exists {
+        notify(status, "Нельзя дублировать напоминания");
+        return;
+    }
 
     let reminder = Reminder {
         title: title.to_string(),
         date,
         time,
-     };
+        completed: false,
+    };
 
     let message = format!(
         "{} - {} в {}. Сохранение не сделано.",
