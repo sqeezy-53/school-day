@@ -2,11 +2,41 @@ use adw::prelude::*;
 use std::cell::RefCell;
 use std::rc::Rc;
 
+#[derive(serde::Serialize, serde::Deserialize)]
 struct Reminder {
     title: String,
     date: chrono::NaiveDate,
     time: chrono::NaiveTime,
     completed: bool,
+}
+
+fn save_reminders(reminders: &[Reminder]) -> Result<(), String> {
+    let json = serde_json::to_string_pretty(reminders).map_err(|error| error.to_string())?;
+
+    std::fs::create_dir_all("data").map_err(|error| error.to_string())?;
+
+    std::fs::write("data/reminders.json.tmp", json).map_err(|error| error.to_string())?;
+
+    std::fs::rename("data/reminders.json.tmp", "data/reminders.json")
+        .map_err(|error| error.to_string())?;
+
+    Ok(())
+}
+
+fn load_reminders() -> Result<Vec<Reminder>, String> {
+    let json = match std::fs::read_to_string("data/reminders.json") {
+        Ok(contents) => contents,
+
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(Vec::new());
+        }
+
+        Err(error) => {
+            return Err(error.to_string());
+        }
+    };
+
+    serde_json::from_str(&json).map_err(|error| error.to_string())
 }
 
 // оформление
@@ -168,7 +198,19 @@ fn import_page(status: &gtk::Label) -> gtk::Box {
 
 fn reminders_page(status: &gtk::Label) -> gtk::Box {
     let page = page("Напоминания");
-    let reminders = Rc::new(RefCell::new(Vec::<Reminder>::new()));
+
+    let loaded = match load_reminders() {
+        Ok(items) => items,
+        Err(error) => {
+            page.append(&text(
+                &format!("Не получилось загрузить напоминание: {error}"),
+                "muted",
+            ));
+            return page;
+        }
+    };
+
+    let reminders = Rc::new(RefCell::new(loaded));
 
     let form = column(16);
     form.add_css_class("panel");
@@ -179,7 +221,7 @@ fn reminders_page(status: &gtk::Label) -> gtk::Box {
     let button = primary("Добавить напоминание");
 
     let list = column(16);
-    render_reminders(&list, &reminders);
+    render_reminders(&list, &reminders, status);
 
     let list_for_button = list.clone();
     let status = status.clone();
@@ -193,7 +235,7 @@ fn reminders_page(status: &gtk::Label) -> gtk::Box {
             &reminders,
         );
 
-        render_reminders(&list_for_button, &reminders);
+        render_reminders(&list_for_button, &reminders, &status);
     });
 
     form.append(&button);
@@ -203,7 +245,7 @@ fn reminders_page(status: &gtk::Label) -> gtk::Box {
 }
 
 //отображение напоминаний
-fn render_reminders(list: &gtk::Box, reminders: &Rc<RefCell<Vec<Reminder>>>) {
+fn render_reminders(list: &gtk::Box, reminders: &Rc<RefCell<Vec<Reminder>>>, status: &gtk::Label) {
     while let Some(child) = list.first_child() {
         list.remove(&child);
     }
@@ -237,10 +279,19 @@ fn render_reminders(list: &gtk::Box, reminders: &Rc<RefCell<Vec<Reminder>>>) {
 
         // Каждая галочка хранит ссылку на общий список и номер своего напоминания.
         let reminders_for_checkbox = Rc::clone(reminders);
+        let status = status.clone();
         checkbox.connect_toggled(move |checkbox| {
             let mut items = reminders_for_checkbox.borrow_mut();
             if let Some(reminder) = items.get_mut(index) {
                 reminder.completed = checkbox.is_active();
+
+                match save_reminders(&items) {
+                    Ok(()) => notify(&status, "Сохранено"),
+
+                    Err(eror) => {
+                        notify(&status, &format!("Ошибка:(: {eror}"));
+                    }
+                }
             }
         });
 
@@ -321,12 +372,24 @@ fn on_add_reminder(
     };
 
     let message = format!(
-        "{} - {} в {}. Сохранение не сделано.",
+        "{} - {} в {}. Сохранено.",
         reminder.title,
         reminder.date.format("%d.%m.%Y"),
         reminder.time.format("%H:%M"),
     );
-    reminders.borrow_mut().push(reminder);
+
+    let mut items = reminders.borrow_mut();
+    items.push(reminder);
+
+    if let Err(error) = save_reminders(&items) {
+        items.pop();
+        notify(
+            status,
+            &format!("Напоминание не добавлено, произошла ошибка:( : {error}"),
+        );
+        return;
+    }
+
     notify(status, &message);
 }
 
