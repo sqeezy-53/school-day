@@ -2,7 +2,7 @@ use adw::prelude::*;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 struct Reminder {
     title: String,
     date: chrono::NaiveDate,
@@ -277,18 +277,43 @@ fn render_reminders(list: &gtk::Box, reminders: &Rc<RefCell<Vec<Reminder>>>, sta
 
         details.append(&text(&when, "muted"));
 
-        // Каждая галочка хранит ссылку на общий список и номер своего напоминания.
+        let delete_button = gtk::Button::from_icon_name("user-trash");
+        delete_button.add_css_class("flat");
+        delete_button.set_tooltip_text(Some("Удалить напоминание"));
+        delete_button.set_valign(gtk::Align::Start);
+
+        let reminders_for_delete = Rc::clone(reminders);
+        let status_for_delete = status.clone();
+        let list_for_delete = list.downgrade();
+        delete_button.connect_clicked(move |_| {
+            let Some(list) = list_for_delete.upgrade() else {
+                return;
+            };
+            if on_delete_remander(Some(index), &reminders_for_delete, &status_for_delete) {
+                render_reminders(&list, &reminders_for_delete, &status_for_delete);
+            }
+        });
+
         let reminders_for_checkbox = Rc::clone(reminders);
         let status = status.clone();
         checkbox.connect_toggled(move |checkbox| {
             let mut items = reminders_for_checkbox.borrow_mut();
             if let Some(reminder) = items.get_mut(index) {
-                reminder.completed = checkbox.is_active();
+                let previous = reminder.completed;
+                let active = checkbox.is_active();
+                if previous == active {
+                    return;
+                }
+                reminder.completed = active;
 
                 match save_reminders(&items) {
                     Ok(()) => notify(&status, "Сохранено"),
 
                     Err(eror) => {
+                        items[index].completed = previous;
+                        // Освобождаем список перед set_active: он снова вызывает toggled.
+                        drop(items);
+                        checkbox.set_active(previous);
                         notify(&status, &format!("Ошибка:(: {eror}"));
                     }
                 }
@@ -297,8 +322,28 @@ fn render_reminders(list: &gtk::Box, reminders: &Rc<RefCell<Vec<Reminder>>>, sta
 
         row.append(&checkbox);
         row.append(&details);
+        row.append(&delete_button);
         list.append(&row);
     }
+
+    let clear_button = gtk::Button::with_label("Удалить выполненные");
+    clear_button.add_css_class("flat");
+    clear_button.set_halign(gtk::Align::Start);
+
+    let reminders_for_clear = Rc::clone(reminders);
+    let status_for_clear = status.clone();
+    let list_for_clear = list.downgrade();
+
+    clear_button.connect_clicked(move |_| {
+        let Some(list) = list_for_clear.upgrade() else {
+            return;
+        };
+        if on_delete_remander(None, &reminders_for_clear, &status_for_clear) {
+            render_reminders(&list, &reminders_for_clear, &status_for_clear);
+        }
+    });
+
+    list.append(&clear_button);
 }
 
 fn settings_page(status: &gtk::Label) -> gtk::Box {
@@ -336,9 +381,9 @@ fn on_add_reminder(
     }
 
     let date = match chrono::NaiveDate::parse_from_str(date.trim(), "%d.%m.%Y") {
-        Ok(parsed_date) => parsed_date,
-        Err(_) => {
-            notify(status, "Введите существующую дату");
+        Ok(parsed_date) if parsed_date.format("%d.%m.%Y").to_string() == date.trim() => parsed_date,
+        _ => {
+            notify(status, "Введите существующую дату в формате ДД.ММ.ГГГГ");
             return;
         }
     };
@@ -393,12 +438,51 @@ fn on_add_reminder(
     notify(status, &message);
 }
 
-fn on_save_settings(class: &str, status: &gtk::Label) {
-    let _ = class;
-    notify(status, "Сохранение напоминаний пока не сделано")
+fn on_delete_remander(
+    index: Option<usize>,
+    reminders: &RefCell<Vec<Reminder>>,
+    status: &gtk::Label,
+) -> bool {
+    let mut updated = reminders.borrow().clone();
+    let old_count = updated.len();
+
+    match index {
+        Some(index) => {
+            if index >= updated.len() {
+                notify(status, "Напоминание не найдено:(");
+                return false;
+            }
+
+            updated.remove(index);
+        }
+
+        None => {
+            updated.retain(|reminder| !reminder.completed);
+        }
+    }
+
+    let removed_count = old_count - updated.len();
+
+    if removed_count == 0 {
+        notify(status, "Выполните хотя бы одно напоминание");
+        return false;
+    }
+
+    if let Err(error) = save_reminders(&updated) {
+        notify(status, &format!("Ошибка:( {error}"));
+        return false;
+    }
+
+    *reminders.borrow_mut() = updated;
+    notify(status, &format!("Было удалено {removed_count} напоминаний"));
+    true
 }
 
-// ПОМОЩНИКИ ОФОРМЛЕНИЯ: повторяющиеся элементы собраны в короткие функции.
+fn on_save_settings(class: &str, status: &gtk::Label) {
+    let _ = class;
+    notify(status, "Сохранение настроек пока не сделано")
+}
+
 fn column(spacing: i32) -> gtk::Box {
     gtk::Box::new(gtk::Orientation::Vertical, spacing)
 }
