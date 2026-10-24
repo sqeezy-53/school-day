@@ -10,6 +10,15 @@ struct Reminder {
     completed: bool,
 }
 
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+struct Lesson {
+    title: String,
+    date: chrono::NaiveDate,
+    time: chrono::NaiveTime,
+    end: chrono::NaiveTime,
+    room: String,
+}
+
 fn save_reminders(reminders: &[Reminder]) -> Result<(), String> {
     let json = serde_json::to_string_pretty(reminders).map_err(|error| error.to_string())?;
 
@@ -359,7 +368,33 @@ fn settings_page(status: &gtk::Label) -> gtk::Box {
     page
 }
 fn on_add_lesson(status: &gtk::Label) {
-    notify(status, "Добавление уроков пока недоступно.");
+    let form = column(12);
+    margins(&form, 24);
+
+    form.append(&text("Новый урок", "title"));
+
+    field(&form, "Предмет", "Например, математика");
+    field(&form, "Дата", "ДД.ММ.ГГГГ");
+    field(&form, "Начало", "ЧЧ:ММ");
+    field(&form, "Конец", "ЧЧ:ММ");
+    field(&form, "Кабинет", "Например, 204А");
+
+    let window = gtk::Window::builder()
+        .title("Добавить урок")
+        .default_width(420)
+        .resizable(false)
+        .modal(true)
+        .child(&form)
+        .build();
+
+    if let Some(parent) = status
+        .root()
+        .and_then(|root| root.downcast::<gtk::Window>().ok())
+    {
+        window.set_transient_for(Some(&parent));
+    }
+
+    window.present();
 }
 
 fn on_import_photo(status: &gtk::Label) {
