@@ -367,17 +367,96 @@ fn settings_page(status: &gtk::Label) -> gtk::Box {
     page.append(&form);
     page
 }
+
+fn parse_lesson(
+    title: &str,
+    date: &str,
+    time: &str,
+    end: &str,
+    room: &str,
+) -> Result<Lesson, String> {
+    let title = title.trim();
+    let room = room.trim();
+
+    if title.is_empty() {
+        return Err("Введите название предмета".to_string());
+    }
+
+    if room.is_empty() {
+        return Err("Введите номер кабинета".to_string());
+    }
+
+    let date_text = date.trim();
+    let date = chrono::NaiveDate::parse_from_str(date_text, "%d.%m.%Y")
+        .map_err(|_| "Введите существующую дату: ДД.ММ.ГГГГ".to_string())?;
+
+    if date.format("%d.%m.%Y").to_string() != date_text {
+        return Err("Укажите дату в формате ДД.ММ.ГГГГ".to_string());
+    }
+
+    let time = chrono::NaiveTime::parse_from_str(time.trim(), "%H:%M")
+        .map_err(|_| "Проверьте время начала".to_string())?;
+
+    let end = chrono::NaiveTime::parse_from_str(end.trim(), "%H:%M")
+        .map_err(|_| "Проверьте время окончания".to_string())?;
+
+    if end <= time {
+        return Err("Конец урока должен быть позже начала".to_string());
+    }
+
+    Ok(Lesson {
+        title: title.to_string(),
+        date,
+        time,
+        end,
+        room: room.to_string(),
+    })
+}
+
 fn on_add_lesson(status: &gtk::Label) {
     let form = column(12);
     margins(&form, 24);
 
     form.append(&text("Новый урок", "title"));
 
-    field(&form, "Предмет", "Например, математика");
-    field(&form, "Дата", "ДД.ММ.ГГГГ");
-    field(&form, "Начало", "ЧЧ:ММ");
-    field(&form, "Конец", "ЧЧ:ММ");
-    field(&form, "Кабинет", "Например, 204А");
+    let title = field(&form, "Предмет", "Например, алгебра");
+    let date = field(&form, "Дата", "ДД.ММ.ГГГГ");
+    let time = field(&form, "Начало", "ЧЧ:ММ");
+    let end = field(&form, "Конец", "ЧЧ:ММ");
+    let room = field(&form, "Кабинет", "Например, 43");
+
+    let button = primary("Проверить");
+    let feedback = text("", "muted");
+
+    form.append(&button);
+    form.append(&feedback);
+
+    button.connect_clicked(move |_| {
+        let result = parse_lesson(
+            title.text().as_str(),
+            date.text().as_str(),
+            time.text().as_str(),
+            end.text().as_str(),
+            room.text().as_str(),
+        );
+
+        match result {
+            Ok(lesson) => {
+                let message = format!(
+                    "{} | {} | {}–{} | кабинет {}",
+                    lesson.title,
+                    lesson.date.format("%d.%m.%Y"),
+                    lesson.time.format("%H:%M"),
+                    lesson.end.format("%H:%M"),
+                    lesson.room,
+                );
+
+                notify(&feedback, &message);
+            }
+
+            Err(error) => notify(&feedback, &error),
+        }
+    });
 
     let window = gtk::Window::builder()
         .title("Добавить урок")
