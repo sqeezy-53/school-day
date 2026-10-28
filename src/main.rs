@@ -96,7 +96,6 @@ fn build_window(app: &adw::Application) {
     let status = text("", "status");
     status.set_visible(false);
     pages.add_named(&schedule_page(&status), Some("schedule"));
-    pages.add_named(&import_page(&status), Some("import"));
     pages.add_named(&reminders_page(&status), Some("reminders"));
     pages.add_named(&settings_page(&status), Some("settings"));
     let navigation = gtk::Box::new(gtk::Orientation::Horizontal, 4);
@@ -104,7 +103,6 @@ fn build_window(app: &adw::Application) {
     let mut first: Option<gtk::ToggleButton> = None;
     for (name, title, icon) in [
         ("schedule", "Расписание", "x-office-calendar-symbolic"),
-        ("import", "Импорт фото", "image-x-generic-symbolic"),
         ("reminders", "Напоминания", "alarm-symbolic"),
         ("settings", "Настройки", "emblem-system-symbolic"),
     ] {
@@ -155,29 +153,6 @@ fn build_window(app: &adw::Application) {
         .content(&root)
         .build();
     window.present();
-}
-
-fn import_page(status: &gtk::Label) -> gtk::Box {
-    let page = page("Импорт фото");
-
-    let picture = gtk::Picture::new();
-    picture.set_can_shrink(true);
-    picture.set_content_fit(gtk::ContentFit::Contain);
-    picture.set_size_request(-1, 320);
-    picture.set_visible(false);
-
-    let button = primary("Выбрать файл");
-
-    let picture_for_button = picture.clone();
-    let status_for_button = status.clone();
-
-    button.connect_clicked(move |_| {
-        on_import_photo(&status_for_button, &picture_for_button);
-    });
-
-    page.append(&button);
-    page.append(&picture);
-    page
 }
 
 fn reminders_page(status: &gtk::Label) -> gtk::Box {
@@ -341,54 +316,6 @@ fn settings_page(status: &gtk::Label) -> gtk::Box {
     form.append(&button);
     page.append(&form);
     page
-}
-
-fn on_import_photo(status: &gtk::Label, picture: &gtk::Picture) {
-    let Some(parent) = status
-        .root()
-        .and_then(|root| root.downcast::<gtk::Window>().ok())
-    else {
-        return;
-    };
-
-    let filter = gtk::FileFilter::new();
-    filter.set_name(Some("Изображения"));
-    filter.add_pixbuf_formats();
-
-    let filters = gtk::gio::ListStore::new::<gtk::FileFilter>();
-    filters.append(&filter);
-
-    let dialog = gtk::FileDialog::new();
-    dialog.set_title("Выберите фотографию расписания");
-    dialog.set_filters(Some(&filters));
-    dialog.set_default_filter(Some(&filter));
-
-    let status = status.clone();
-    let picture = picture.clone();
-
-    dialog.open(
-        Some(&parent),
-        None::<&gtk::gio::Cancellable>,
-        move |result| match result {
-            Ok(file) => match gtk::gdk::Texture::from_file(&file) {
-                Ok(texture) => {
-                    picture.set_paintable(Some(&texture));
-                    picture.set_visible(true);
-                    notify(&status, "Фотография открыта ");
-                }
-
-                Err(error) => {
-                    notify(&status, &format!("Не удалось открыть изображение {error}"));
-                }
-            },
-
-            Err(error) if error.matches(gtk::DialogError::Dismissed) => {}
-
-            Err(error) => {
-                notify(&status, &format!("Не удалось открыть файл {error}"));
-            }
-        },
-    );
 }
 
 fn on_add_reminder(
