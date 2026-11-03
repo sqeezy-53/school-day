@@ -1,3 +1,4 @@
+mod homework;
 mod lessons;
 mod schedule;
 
@@ -5,43 +6,6 @@ use adw::prelude::*;
 use schedule::schedule_page;
 use std::cell::RefCell;
 use std::rc::Rc;
-
-#[derive(Clone, serde::Serialize, serde::Deserialize)]
-struct Reminder {
-    title: String,
-    date: chrono::NaiveDate,
-    time: chrono::NaiveTime,
-    completed: bool,
-}
-
-fn save_reminders(reminders: &[Reminder]) -> Result<(), String> {
-    let json = serde_json::to_string_pretty(reminders).map_err(|error| error.to_string())?;
-
-    std::fs::create_dir_all("data").map_err(|error| error.to_string())?;
-
-    std::fs::write("data/reminders.json.tmp", json).map_err(|error| error.to_string())?;
-
-    std::fs::rename("data/reminders.json.tmp", "data/reminders.json")
-        .map_err(|error| error.to_string())?;
-
-    Ok(())
-}
-
-fn load_reminders() -> Result<Vec<Reminder>, String> {
-    let json = match std::fs::read_to_string("data/reminders.json") {
-        Ok(contents) => contents,
-
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            return Ok(Vec::new());
-        }
-
-        Err(error) => {
-            return Err(error.to_string());
-        }
-    };
-
-    serde_json::from_str(&json).map_err(|error| error.to_string())
-}
 
 // оформление
 const CSS: &str = r#"
@@ -95,15 +59,32 @@ fn build_window(app: &adw::Application) {
     pages.set_vhomogeneous(false);
     let status = text("", "status");
     status.set_visible(false);
-    pages.add_named(&schedule_page(&status), Some("schedule"));
-    pages.add_named(&reminders_page(&status), Some("reminders"));
+    // Обе вкладки получают ссылки на один список уроков и домашних заданий.
+    match lessons::load_lessons() {
+        Ok(loaded) => {
+            let items = Rc::new(RefCell::new(loaded));
+            pages.add_named(&schedule_page(&status, Rc::clone(&items)), Some("schedule"));
+            pages.add_named(&homework::homework_page(&status, items), Some("homework"));
+        }
+        Err(error) => {
+            // При ошибке загрузки не создаём пустой список для записи поверх файла.
+            for (name, title) in [("schedule", "Расписание"), ("homework", "ДЗ")] {
+                let content = page(title);
+                content.append(&text(
+                    &format!("Не удалось загрузить уроки: {error}"),
+                    "muted",
+                ));
+                pages.add_named(&content, Some(name));
+            }
+        }
+    }
     pages.add_named(&settings_page(&status), Some("settings"));
     let navigation = gtk::Box::new(gtk::Orientation::Horizontal, 4);
     header.set_title_widget(Some(&navigation));
     let mut first: Option<gtk::ToggleButton> = None;
     for (name, title, icon) in [
         ("schedule", "Расписание", "x-office-calendar-symbolic"),
-        ("reminders", "Напоминания", "alarm-symbolic"),
+        ("homework", "ДЗ", "document-edit-symbolic"),
         ("settings", "Настройки", "emblem-system-symbolic"),
     ] {
         let button = gtk::ToggleButton::new();
@@ -155,156 +136,6 @@ fn build_window(app: &adw::Application) {
     window.present();
 }
 
-fn reminders_page(status: &gtk::Label) -> gtk::Box {
-    let page = page("Напоминания");
-
-    let loaded = match load_reminders() {
-        Ok(items) => items,
-        Err(error) => {
-            page.append(&text(
-                &format!("Не получилось загрузить напоминание: {error}"),
-                "muted",
-            ));
-            return page;
-        }
-    };
-
-    let reminders = Rc::new(RefCell::new(loaded));
-
-    let form = column(16);
-    form.add_css_class("panel");
-
-    let title = field(&form, "Название", "Что нужно сделать");
-    let date = field(&form, "Дата", "ДД.ММ.ГГГГ");
-    let time = field(&form, "Время", "ЧЧ:ММ");
-    let button = primary("Добавить напоминание");
-
-    let list = column(16);
-    render_reminders(&list, &reminders, status);
-
-    let list_for_button = list.clone();
-    let status = status.clone();
-
-    button.connect_clicked(move |_| {
-        on_add_reminder(
-            title.text().as_str(),
-            date.text().as_str(),
-            time.text().as_str(),
-            &status,
-            &reminders,
-        );
-
-        render_reminders(&list_for_button, &reminders, &status);
-    });
-
-    form.append(&button);
-    page.append(&form);
-    page.append(&list);
-    page
-}
-
-//отображение напоминаний
-fn render_reminders(list: &gtk::Box, reminders: &Rc<RefCell<Vec<Reminder>>>, status: &gtk::Label) {
-    while let Some(child) = list.first_child() {
-        list.remove(&child);
-    }
-
-    let items = reminders.borrow();
-
-    if items.is_empty() {
-        list.append(&text("Нету напоминаний", "muted"));
-        return;
-    }
-
-    for (index, reminder) in items.iter().enumerate() {
-        let row = gtk::Box::new(gtk::Orientation::Horizontal, 12);
-        row.add_css_class("panel");
-        let checkbox = gtk::CheckButton::new();
-        checkbox.set_valign(gtk::Align::Start);
-        checkbox.set_active(reminder.completed);
-
-        let details = column(6);
-        details.set_hexpand(true);
-
-        details.append(&text(&reminder.title, "section"));
-
-        let when = format!(
-            "{} в {}",
-            reminder.date.format("%d.%m.%Y"),
-            reminder.time.format("%H:%M"),
-        );
-
-        details.append(&text(&when, "muted"));
-
-        let delete_button = gtk::Button::from_icon_name("user-trash");
-        delete_button.add_css_class("flat");
-        delete_button.set_tooltip_text(Some("Удалить напоминание"));
-        delete_button.set_valign(gtk::Align::Start);
-
-        let reminders_for_delete = Rc::clone(reminders);
-        let status_for_delete = status.clone();
-        let list_for_delete = list.downgrade();
-        delete_button.connect_clicked(move |_| {
-            let Some(list) = list_for_delete.upgrade() else {
-                return;
-            };
-            if on_delete_remander(Some(index), &reminders_for_delete, &status_for_delete) {
-                render_reminders(&list, &reminders_for_delete, &status_for_delete);
-            }
-        });
-
-        let reminders_for_checkbox = Rc::clone(reminders);
-        let status = status.clone();
-        checkbox.connect_toggled(move |checkbox| {
-            let mut items = reminders_for_checkbox.borrow_mut();
-            if let Some(reminder) = items.get_mut(index) {
-                let previous = reminder.completed;
-                let active = checkbox.is_active();
-                if previous == active {
-                    return;
-                }
-                reminder.completed = active;
-
-                match save_reminders(&items) {
-                    Ok(()) => notify(&status, "Сохранено"),
-
-                    Err(eror) => {
-                        items[index].completed = previous;
-                        // Освобождаем список перед set_active: он снова вызывает toggled.
-                        drop(items);
-                        checkbox.set_active(previous);
-                        notify(&status, &format!("Ошибка:(: {eror}"));
-                    }
-                }
-            }
-        });
-
-        row.append(&checkbox);
-        row.append(&details);
-        row.append(&delete_button);
-        list.append(&row);
-    }
-
-    let clear_button = gtk::Button::with_label("Удалить выполненные");
-    clear_button.add_css_class("flat");
-    clear_button.set_halign(gtk::Align::Start);
-
-    let reminders_for_clear = Rc::clone(reminders);
-    let status_for_clear = status.clone();
-    let list_for_clear = list.downgrade();
-
-    clear_button.connect_clicked(move |_| {
-        let Some(list) = list_for_clear.upgrade() else {
-            return;
-        };
-        if on_delete_remander(None, &reminders_for_clear, &status_for_clear) {
-            render_reminders(&list, &reminders_for_clear, &status_for_clear);
-        }
-    });
-
-    list.append(&clear_button);
-}
-
 fn settings_page(status: &gtk::Label) -> gtk::Box {
     let page = page("Настройки");
     let form = column(16);
@@ -316,117 +147,6 @@ fn settings_page(status: &gtk::Label) -> gtk::Box {
     form.append(&button);
     page.append(&form);
     page
-}
-
-fn on_add_reminder(
-    title: &str,
-    date: &str,
-    time: &str,
-    status: &gtk::Label,
-    reminders: &RefCell<Vec<Reminder>>,
-) {
-    let title = title.trim();
-    if title.is_empty() {
-        notify(status, "Введите название напоминания");
-        return;
-    }
-
-    let date = match chrono::NaiveDate::parse_from_str(date.trim(), "%d.%m.%Y") {
-        Ok(parsed_date) if parsed_date.format("%d.%m.%Y").to_string() == date.trim() => parsed_date,
-        _ => {
-            notify(status, "Введите существующую дату в формате ДД.ММ.ГГГГ");
-            return;
-        }
-    };
-
-    let time = match chrono::NaiveTime::parse_from_str(time.trim(), "%H:%M") {
-        Ok(parsed_time) => parsed_time,
-        Err(_) => {
-            notify(status, "Введите время");
-            return;
-        }
-    };
-
-    //запрет дубля
-
-    let exists = reminders.borrow().iter().any(|reminder| {
-        reminder.title.to_lowercase() == title.to_lowercase()
-            && reminder.date == date
-            && reminder.time == time
-    });
-
-    if exists {
-        notify(status, "Нельзя дублировать напоминания");
-        return;
-    }
-
-    let reminder = Reminder {
-        title: title.to_string(),
-        date,
-        time,
-        completed: false,
-    };
-
-    let message = format!(
-        "{} - {} в {}. Сохранено.",
-        reminder.title,
-        reminder.date.format("%d.%m.%Y"),
-        reminder.time.format("%H:%M"),
-    );
-
-    let mut items = reminders.borrow_mut();
-    items.push(reminder);
-
-    if let Err(error) = save_reminders(&items) {
-        items.pop();
-        notify(
-            status,
-            &format!("Напоминание не добавлено, произошла ошибка:( : {error}"),
-        );
-        return;
-    }
-
-    notify(status, &message);
-}
-
-fn on_delete_remander(
-    index: Option<usize>,
-    reminders: &RefCell<Vec<Reminder>>,
-    status: &gtk::Label,
-) -> bool {
-    let mut updated = reminders.borrow().clone();
-    let old_count = updated.len();
-
-    match index {
-        Some(index) => {
-            if index >= updated.len() {
-                notify(status, "Напоминание не найдено:(");
-                return false;
-            }
-
-            updated.remove(index);
-        }
-
-        None => {
-            updated.retain(|reminder| !reminder.completed);
-        }
-    }
-
-    let removed_count = old_count - updated.len();
-
-    if removed_count == 0 {
-        notify(status, "Выполните хотя бы одно напоминание");
-        return false;
-    }
-
-    if let Err(error) = save_reminders(&updated) {
-        notify(status, &format!("Ошибка:( {error}"));
-        return false;
-    }
-
-    *reminders.borrow_mut() = updated;
-    notify(status, &format!("Было удалено {removed_count} напоминаний"));
-    true
 }
 
 fn on_save_settings(class: &str, status: &gtk::Label) {

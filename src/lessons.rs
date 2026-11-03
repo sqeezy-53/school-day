@@ -1,4 +1,8 @@
 use chrono::{NaiveDate, NaiveTime};
+use std::cell::RefCell;
+use std::rc::Rc;
+
+pub type Lessons = Rc<RefCell<Vec<Lesson>>>;
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Lesson {
@@ -7,6 +11,11 @@ pub struct Lesson {
     pub time: NaiveTime,
     pub end: NaiveTime,
     pub room: String,
+    #[serde(default)]
+    pub homework: String,
+
+    #[serde(default)]
+    pub homework_completed: bool,
 }
 
 const FILE: &str = "data/lessons.json";
@@ -38,7 +47,10 @@ pub fn parse_lesson(
         time,
         end,
         room: room.to_string(),
+        homework: String::new(),
+        homework_completed: false,
     };
+
     validate_lesson(&lesson)?;
     Ok(lesson)
 }
@@ -126,5 +138,26 @@ pub fn delete_lesson(items: &mut Vec<Lesson>, index: usize) -> Result<(), String
     updated.remove(index);
     save_lessons(&updated)?;
     *items = updated;
+    Ok(())
+}
+
+pub fn set_homework_completed(
+    items: &mut Vec<Lesson>,
+    index: usize,
+    completed: bool,
+) -> Result<(), String> {
+    let mut updated = items.clone();
+
+    let lesson = updated.get_mut(index).ok_or("Урок не найден")?;
+
+    if lesson.homework.trim().is_empty() {
+        return Err("У этого урока нет домашнего задания".to_string());
+    }
+
+    lesson.homework_completed = completed;
+
+    save_lessons(&updated)?;
+    *items = updated;
+
     Ok(())
 }

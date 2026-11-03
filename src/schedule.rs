@@ -1,27 +1,14 @@
 use adw::prelude::*;
 use chrono::{Datelike, NaiveDate, NaiveTime, Timelike};
-use std::cell::{Cell, RefCell};
+use std::cell::Cell;
 use std::rc::Rc;
 
-use crate::lessons::{Lesson, delete_lesson, load_lessons, parse_lesson, store_lesson};
+use crate::lessons::{Lesson, Lessons, delete_lesson, parse_lesson, store_lesson};
+
 use crate::{column, empty_state, field, margins, notify, page, primary, text};
 
-type Lessons = Rc<RefCell<Vec<Lesson>>>;
-
-pub fn schedule_page(status: &gtk::Label) -> gtk::Box {
+pub fn schedule_page(status: &gtk::Label, lessons: Lessons) -> gtk::Box {
     let page = page("Расписание");
-    let loaded = match load_lessons() {
-        Ok(items) => items,
-        Err(error) => {
-            // При ошибке не открываем пустой список, чтобы не затереть исходный файл.
-            page.append(&text(
-                &format!("Не удалось загрузить расписание: {error}"),
-                "muted",
-            ));
-            return page;
-        }
-    };
-    let lessons = Rc::new(RefCell::new(loaded));
     let calendar = gtk::Calendar::new();
     let date = date_button(&calendar);
     let list = column(0);
@@ -76,6 +63,17 @@ pub fn schedule_page(status: &gtk::Label) -> gtk::Box {
 
     let weak_list = list.downgrade();
     let status = status.clone();
+    let items_for_map = Rc::clone(&lessons);
+    let calendar_for_map = calendar.clone();
+    let status_for_map = status.clone();
+    let list_for_map = list.downgrade();
+
+    page.connect_map(move |_| {
+        if let Some(list) = list_for_map.upgrade() {
+            render_lessons(&list, &items_for_map, &calendar_for_map, &status_for_map);
+        }
+    });
+
     calendar.connect_day_selected(move |calendar| {
         if let Some(list) = weak_list.upgrade() {
             render_lessons(&list, &lessons, calendar, &status);
@@ -166,6 +164,15 @@ fn render_lessons(
         details.set_valign(gtk::Align::Center);
         details.append(&text(&lesson.title, "section"));
         details.append(&text(&format!("Кабинет {}", lesson.room), "muted"));
+        if !lesson.homework.is_empty() {
+            let label = if lesson.homework_completed {
+                "ДЗ выполнено"
+            } else {
+                "ДЗ"
+            };
+
+            details.append(&text(&format!("{label}: {}", lesson.homework), "muted"));
+        }
         row.append(&details);
         for (icon, label, editing) in [
             ("document-edit-symbolic", "Изменить урок", true),
@@ -371,9 +378,27 @@ fn on_add_lesson(
         });
     }
     let room = field(&form, "Кабинет", "Например, 43 или спортзал");
+
+    form.append(&text("Домашнее задание", "section"));
+
+    let homework = gtk::TextView::new();
+    homework.set_wrap_mode(gtk::WrapMode::WordChar);
+    homework.set_top_margin(10);
+    homework.set_bottom_margin(10);
+    homework.set_left_margin(10);
+    homework.set_right_margin(10);
+
+    let homework_scroll = gtk::ScrolledWindow::new();
+    homework_scroll.set_min_content_height(100);
+    homework_scroll.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Automatic);
+    homework_scroll.set_child(Some(&homework));
+
+    form.append(&homework_scroll);
+
     if let Some(lesson) = &existing {
         title.set_text(&lesson.title);
         room.set_text(&lesson.room);
+        homework.buffer().set_text(&lesson.homework);
     }
     let feedback = text("", "muted");
     feedback.set_visible(false);
@@ -460,7 +485,19 @@ fn on_add_lesson(
             &end_picker.time().format("%H:%M").to_string(),
             room.text().as_str(),
         )
-        .and_then(|lesson| store_lesson(&mut items.borrow_mut(), lesson, index));
+        .and_then(|mut lesson| {
+            let buffer = homework.buffer();
+
+            let entered = buffer.text(&buffer.start_iter(), &buffer.end_iter(), false);
+            lesson.homework = entered.trim().to_string();
+
+            if let Some(previous) = &existing {
+                lesson.homework_completed =
+                    previous.homework_completed && previous.homework == lesson.homework;
+            }
+            store_lesson(&mut items.borrow_mut(), lesson, index)
+        });
+
         match result {
             Ok(()) => {
                 select_date(&calendar, date);
