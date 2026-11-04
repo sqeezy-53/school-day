@@ -1,0 +1,2083 @@
+{
+  "mingw-w64-ucrt-x86_64-adwaita-icon-theme": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-adwaita-icon-theme"
+    ],
+    "BASE": [
+      "mingw-w64-adwaita-icon-theme"
+    ],
+    "VERSION": [
+      "51.0-1"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-adwaita-icon-theme-51.0-1-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "27323f39c04761d94b882ad012dd4a78eccc0efe4e0d8d5a28786a5eec6bdc4c"
+    ],
+    "LICENSE": [
+      "spdx:LGPL-3.0-or-later OR CC-BY-SA-3.0"
+    ],
+    "URL": [
+      "https://gitlab.gnome.org/GNOME/adwaita-icon-theme"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-adwaita-icon-theme-51.0-1-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-adwaita-icon-theme-51.0-1.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-adwaita-icon-theme-legacy": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-adwaita-icon-theme-legacy"
+    ],
+    "BASE": [
+      "mingw-w64-adwaita-icon-theme-legacy"
+    ],
+    "VERSION": [
+      "46.2-1"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-adwaita-icon-theme-legacy-46.2-1-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "f365c5724a7829e5cc52f131cd664f0391f996cf456bc7da6196e4cc5ce82903"
+    ],
+    "LICENSE": [
+      "spdx:LGPL-3.0-or-later OR CC-BY-SA-3.0"
+    ],
+    "URL": [
+      "https://gitlab.gnome.org/GNOME/adwaita-icon-theme-legacy"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-adwaita-icon-theme-legacy-46.2-1-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-adwaita-icon-theme-legacy-46.2-1.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-brotli": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-brotli"
+    ],
+    "BASE": [
+      "mingw-w64-brotli"
+    ],
+    "VERSION": [
+      "1.2.1-1"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-brotli-1.2.1-1-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "e3257d4303fc0aca4c64f702d4c8cd766a321351c5e61927631c30bfdf2e7536"
+    ],
+    "LICENSE": [
+      "spdx:MIT"
+    ],
+    "URL": [
+      "https://github.com/google/brotli"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-brotli-1.2.1-1-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-brotli-1.2.1-1.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-bzip2": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-bzip2"
+    ],
+    "BASE": [
+      "mingw-w64-bzip2"
+    ],
+    "VERSION": [
+      "1.0.8-4"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-bzip2-1.0.8-4-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "f03a2174034ddd2d96cecd34f617c5f8e2ef86c812b8d2bb3b8875257f2c8bfa"
+    ],
+    "LICENSE": [
+      "custom"
+    ],
+    "URL": [
+      "https://sourceware.org/bzip2/"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-bzip2-1.0.8-4-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-bzip2-1.0.8-4.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-cairo": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-cairo"
+    ],
+    "BASE": [
+      "mingw-w64-cairo"
+    ],
+    "VERSION": [
+      "1.18.6-2"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-cairo-1.18.6-2-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "021c0a4d1df463d08d0cac170818a7cbaccaa5b09ac6edc7948e461cb5a46e85"
+    ],
+    "LICENSE": [
+      "spdx:LGPL-2.1-or-later OR MPL-1.1"
+    ],
+    "URL": [
+      "https://cairographics.org/"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-cairo-1.18.6-2-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-cairo-1.18.6-2.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-cc-libs": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-cc-libs"
+    ],
+    "BASE": [
+      "mingw-w64-gcc"
+    ],
+    "VERSION": [
+      "16.2.0-6"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-cc-libs-16.2.0-6-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "d8fff9e62443168bcda8ce746697243519c4f090ea607357ce94feac0bd10a50"
+    ],
+    "LICENSE": [
+      "spdx:GPL-3.0-or-later WITH GCC-exception-3.1 AND GFDL-1.3-or-later"
+    ],
+    "URL": [
+      "https://gcc.gnu.org"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-cc-libs-16.2.0-6-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-gcc-16.2.0-6.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-directx-headers": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-directx-headers"
+    ],
+    "BASE": [
+      "mingw-w64-directx-headers"
+    ],
+    "VERSION": [
+      "1~1.619.5-1"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-directx-headers-1~1.619.5-1-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "e3524c39e8b0ead83f336e67b7b1b520fdcb801c6eb9c6134cbdbd196d67deb8"
+    ],
+    "LICENSE": [
+      "spdx:MIT"
+    ],
+    "URL": [
+      "https://github.com/microsoft/DirectX-Headers"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-directx-headers-1~1.619.5-1-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-directx-headers-1~1.619.5-1.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-directxmath": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-directxmath"
+    ],
+    "BASE": [
+      "mingw-w64-directxmath"
+    ],
+    "VERSION": [
+      "3.20.b-1"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-directxmath-3.20.b-1-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "c01486e96a024a7366d3ceadf5b8b8263d50c7d7a02343abdd43c47200cd223e"
+    ],
+    "LICENSE": [
+      "spdx:MIT"
+    ],
+    "URL": [
+      "https://go.microsoft.com/fwlink/?LinkID=615560"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-directxmath-3.20.b-1-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-directxmath-3.20.b-1.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-egl-headers": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-egl-headers"
+    ],
+    "BASE": [
+      "mingw-w64-egl-headers"
+    ],
+    "VERSION": [
+      "1.5.r284.3ae2b7c-1"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-egl-headers-1.5.r284.3ae2b7c-1-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "29743159048cf216f75d0dc3eb3e0a04a07515db17d839803e54b060f5aeb0b3"
+    ],
+    "LICENSE": [
+      "spdx:Apache-2.0"
+    ],
+    "URL": [
+      "https://registry.khronos.org/EGL/"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-egl-headers-1.5.r284.3ae2b7c-1-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-egl-headers-1.5.r284.3ae2b7c-1.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-expat": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-expat"
+    ],
+    "BASE": [
+      "mingw-w64-expat"
+    ],
+    "VERSION": [
+      "2.10.0-1"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-expat-2.10.0-1-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "6e6c3e6d748ef546cd7e691637fb1cdade6183bbccab85056dc04f1f9237009f"
+    ],
+    "LICENSE": [
+      "spdx:MIT"
+    ],
+    "URL": [
+      "https://libexpat.github.io/"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-expat-2.10.0-1-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-expat-2.10.0-1.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-fontconfig": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-fontconfig"
+    ],
+    "BASE": [
+      "mingw-w64-fontconfig"
+    ],
+    "VERSION": [
+      "2.18.3-1"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-fontconfig-2.18.3-1-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "d0b364f3ee37e3b6f6c136688ce8fa909bb6d8a69df7e08de1aa40870d9e1d60"
+    ],
+    "LICENSE": [
+      "custom"
+    ],
+    "URL": [
+      "https://wiki.freedesktop.org/www/Software/fontconfig/"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-fontconfig-2.18.3-1-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-fontconfig-2.18.3-1.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-freetype": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-freetype"
+    ],
+    "BASE": [
+      "mingw-w64-freetype"
+    ],
+    "VERSION": [
+      "2.15.0-1"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-freetype-2.15.0-1-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "a9a691f71d1a553099c54ca666e611abfb2b4ff08dae24f2a5af72e22a7e5feb"
+    ],
+    "LICENSE": [
+      "spdx:GPL-2.0-or-later OR FTL"
+    ],
+    "URL": [
+      "https://www.freetype.org/"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-freetype-2.15.0-1-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-freetype-2.15.0-1.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-fribidi": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-fribidi"
+    ],
+    "BASE": [
+      "mingw-w64-fribidi"
+    ],
+    "VERSION": [
+      "1.0.18-1"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-fribidi-1.0.18-1-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "4837d3626349c617aaa2db3d116f9b7ea208b11644f507a6a83eab36bb3ac920"
+    ],
+    "LICENSE": [
+      "spdx:LGPL-2.1-or-later"
+    ],
+    "URL": [
+      "https://github.com/fribidi/fribidi"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-fribidi-1.0.18-1-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-fribidi-1.0.18-1.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-gdk-pixbuf2": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-gdk-pixbuf2"
+    ],
+    "BASE": [
+      "mingw-w64-gdk-pixbuf2"
+    ],
+    "VERSION": [
+      "2.44.8-1"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-gdk-pixbuf2-2.44.8-1-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "aacfe4bdf635b1ad5bd50ffe9b106f9256e5aee567aec37d4fabe142a0353419"
+    ],
+    "LICENSE": [
+      "spdx:LGPL-2.1-or-later"
+    ],
+    "URL": [
+      "https://gitlab.gnome.org/GNOME/gdk-pixbuf"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-gdk-pixbuf2-2.44.8-1-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-gdk-pixbuf2-2.44.8-1.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-gettext-runtime": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-gettext-runtime"
+    ],
+    "BASE": [
+      "mingw-w64-gettext"
+    ],
+    "VERSION": [
+      "1.0-1"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-gettext-runtime-1.0-1-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "ba693dda4ac375af76ce481ff3a6e7481286546cc7dc6d56c7021dae34084157"
+    ],
+    "LICENSE": [
+      "spdx:GPL-3.0-or-later AND LGPL-2.1-or-later"
+    ],
+    "URL": [
+      "https://www.gnu.org/software/gettext/"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-gettext-runtime-1.0-1-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-gettext-1.0-1.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-giflib": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-giflib"
+    ],
+    "BASE": [
+      "mingw-w64-giflib"
+    ],
+    "VERSION": [
+      "6.1.3-1"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-giflib-6.1.3-1-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "9e7ac8feb0e2af6e0fce3c8ead1bd7bcaf018661d08033858c1e2657a04f6f1a"
+    ],
+    "LICENSE": [
+      "spdx:MIT"
+    ],
+    "URL": [
+      "https://sourceforge.net/projects/giflib/"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-giflib-6.1.3-1-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-giflib-6.1.3-1.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-gles-headers": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-gles-headers"
+    ],
+    "BASE": [
+      "mingw-w64-gles-headers"
+    ],
+    "VERSION": [
+      "3.2.r1065.7fc154c-1"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-gles-headers-3.2.r1065.7fc154c-1-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "066007a50bd08f062b5494f2c4811a219e1a65f4ecdce2beb453f6d9d8b92098"
+    ],
+    "LICENSE": [
+      "spdx:MIT"
+    ],
+    "URL": [
+      "https://www.khronos.org/opengles"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-gles-headers-3.2.r1065.7fc154c-1-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-gles-headers-3.2.r1065.7fc154c-1.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-glib2": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-glib2"
+    ],
+    "BASE": [
+      "mingw-w64-glib2"
+    ],
+    "VERSION": [
+      "2.90.1-1"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-glib2-2.90.1-1-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "9a7826349279bcca0c935b01880d812be9de9609aef2205be68fd7a6128c1695"
+    ],
+    "LICENSE": [
+      "spdx:LGPL-2.1-or-later"
+    ],
+    "URL": [
+      "https://gitlab.gnome.org/GNOME/glib"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-glib2-2.90.1-1-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-glib2-2.90.1-1.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-gmp": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-gmp"
+    ],
+    "BASE": [
+      "mingw-w64-gmp"
+    ],
+    "VERSION": [
+      "6.3.0-2"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-gmp-6.3.0-2-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "e82a75968a556484a50084578238a84eb60fb93e34986fd6695c537975bd39ea"
+    ],
+    "LICENSE": [
+      "LGPL3",
+      "GPL"
+    ],
+    "URL": [
+      "https://gmplib.org/"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-gmp-6.3.0-2-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-gmp-6.3.0-2.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-gnutls": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-gnutls"
+    ],
+    "BASE": [
+      "mingw-w64-gnutls"
+    ],
+    "VERSION": [
+      "3.8.13-3"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-gnutls-3.8.13-3-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "303da3babd11f545fcac647439298e8559951ce6a1086666faf8ad2a1f708be6"
+    ],
+    "LICENSE": [
+      "spdx:GPL-3.0-or-later",
+      "spdx:LGPL-2.1-or-later"
+    ],
+    "URL": [
+      "https://www.gnutls.org/"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-gnutls-3.8.13-3-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-gnutls-3.8.13-3.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-graphene": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-graphene"
+    ],
+    "BASE": [
+      "mingw-w64-graphene"
+    ],
+    "VERSION": [
+      "1.10.8-3"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-graphene-1.10.8-3-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "4ae49208acf49de84f2abbe9555c2d22f51ab52c1509f5ac8bb5ce7fcaf07d57"
+    ],
+    "LICENSE": [
+      "spdx:MIT"
+    ],
+    "URL": [
+      "https://ebassi.github.io/graphene/"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-graphene-1.10.8-3-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-graphene-1.10.8-3.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-graphite2": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-graphite2"
+    ],
+    "BASE": [
+      "mingw-w64-graphite2"
+    ],
+    "VERSION": [
+      "1.3.15-1"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-graphite2-1.3.15-1-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "34ca1f88bff10ef182a6b1c8e5622d5029f13b05748e361af13b552b422ea849"
+    ],
+    "LICENSE": [
+      "spdx:LGPL-2.1-or-later"
+    ],
+    "URL": [
+      "https://github.com/silnrsi/graphite"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-graphite2-1.3.15-1-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-graphite2-1.3.15-1.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-gst-plugins-bad-libs": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-gst-plugins-bad-libs"
+    ],
+    "BASE": [
+      "mingw-w64-gst-plugins-bad"
+    ],
+    "VERSION": [
+      "1.28.8-3"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-gst-plugins-bad-libs-1.28.8-3-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "4825e648fa0c10b17cdddaedc84aba9a1d869429acbe675762066dc889aaec5d"
+    ],
+    "LICENSE": [
+      "spdx:LGPL-2.1-or-later"
+    ],
+    "URL": [
+      "https://gstreamer.freedesktop.org/"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-gst-plugins-bad-libs-1.28.8-3-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-gst-plugins-bad-1.28.8-3.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-gst-plugins-base": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-gst-plugins-base"
+    ],
+    "BASE": [
+      "mingw-w64-gst-plugins-base"
+    ],
+    "VERSION": [
+      "1.28.8-1"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-gst-plugins-base-1.28.8-1-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "2c6e937a3e551eea5a139c47896517bb6fa6a00dfefcf3a0968e3175c1ba4eaf"
+    ],
+    "LICENSE": [
+      "spdx:LGPL-2.1-or-later"
+    ],
+    "URL": [
+      "https://gstreamer.freedesktop.org/"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-gst-plugins-base-1.28.8-1-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-gst-plugins-base-1.28.8-1.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-gstreamer": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-gstreamer"
+    ],
+    "BASE": [
+      "mingw-w64-gstreamer"
+    ],
+    "VERSION": [
+      "1.28.8-1"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-gstreamer-1.28.8-1-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "db13c201cbc385aebf23916b971ae0aaf4aeabb53c07f2ca232a644886b82e1b"
+    ],
+    "LICENSE": [
+      "spdx:LGPL-2.1-or-later"
+    ],
+    "URL": [
+      "https://gstreamer.freedesktop.org/"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-gstreamer-1.28.8-1-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-gstreamer-1.28.8-1.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-gtk-update-icon-cache": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-gtk-update-icon-cache"
+    ],
+    "BASE": [
+      "mingw-w64-gtk3"
+    ],
+    "VERSION": [
+      "3.24.52-1"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-gtk-update-icon-cache-3.24.52-1-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "eedfe01d226496699b95b065b3ec2a4fb3c51979b2fd649541a560d1f949ae18"
+    ],
+    "LICENSE": [
+      "spdx:LGPL-2.1-or-later"
+    ],
+    "URL": [
+      "https://www.gtk.org/"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-gtk-update-icon-cache-3.24.52-1-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-gtk3-3.24.52-1.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-gtk4": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-gtk4"
+    ],
+    "BASE": [
+      "mingw-w64-gtk4"
+    ],
+    "VERSION": [
+      "4.24.1-1"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-gtk4-4.24.1-1-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "03e6fd251437d50ea8c53b90e2ece1879064fdc30d0c7675da64f1d0ce3bcde8"
+    ],
+    "LICENSE": [
+      "spdx:LGPL-2.1-or-later"
+    ],
+    "URL": [
+      "https://www.gtk.org"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-gtk4-4.24.1-1-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-gtk4-4.24.1-1.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-harfbuzz": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-harfbuzz"
+    ],
+    "BASE": [
+      "mingw-w64-harfbuzz"
+    ],
+    "VERSION": [
+      "15.0.0-1"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-harfbuzz-15.0.0-1-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "3f9abf2efe4e0380291b48583551475031f5da524b2d60962d8e3c479505c4cd"
+    ],
+    "LICENSE": [
+      "spdx:MIT"
+    ],
+    "URL": [
+      "https://harfbuzz.github.io/"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-harfbuzz-15.0.0-1-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-harfbuzz-15.0.0-1.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-hicolor-icon-theme": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-hicolor-icon-theme"
+    ],
+    "BASE": [
+      "mingw-w64-hicolor-icon-theme"
+    ],
+    "VERSION": [
+      "0.18-1"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-hicolor-icon-theme-0.18-1-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "1ef00d7c034935a479f951a36a7b0e17cfdc482765e860924061b98e6948340c"
+    ],
+    "LICENSE": [
+      "spdx:GPL-2.0-or-later"
+    ],
+    "URL": [
+      "https://wiki.freedesktop.org/www/Software/icon-theme/"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-hicolor-icon-theme-0.18-1-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-hicolor-icon-theme-0.18-1.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-iso-codes": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-iso-codes"
+    ],
+    "BASE": [
+      "mingw-w64-iso-codes"
+    ],
+    "VERSION": [
+      "4.20.1-1"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-iso-codes-4.20.1-1-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "4e510fda4d64bcadf7d79d76f02f7080e016bf37759b0a5fe5b2e65553e49785"
+    ],
+    "LICENSE": [
+      "spdx:LGPL-2.1-or-later"
+    ],
+    "URL": [
+      "https://salsa.debian.org/iso-codes-team/iso-codes"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-iso-codes-4.20.1-1-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-iso-codes-4.20.1-1.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-jbigkit": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-jbigkit"
+    ],
+    "BASE": [
+      "mingw-w64-jbigkit"
+    ],
+    "VERSION": [
+      "2.1-6"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-jbigkit-2.1-6-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "9e237d1041350e7436294cfa13d4bd3d1606d1f2a32ade2eb2958b4d4e79b7ad"
+    ],
+    "LICENSE": [
+      "spdx:GPL-2.0"
+    ],
+    "URL": [
+      "https://www.cl.cam.ac.uk/~mgk25/jbigkit/"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-jbigkit-2.1-6-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-jbigkit-2.1-6.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-json-glib": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-json-glib"
+    ],
+    "BASE": [
+      "mingw-w64-json-glib"
+    ],
+    "VERSION": [
+      "1.10.8-2"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-json-glib-1.10.8-2-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "3b07443be79b7be8062f085d4453161fc71441700494a393807f76c0abda2fc6"
+    ],
+    "LICENSE": [
+      "spdx:LGPL-2.1-or-later"
+    ],
+    "URL": [
+      "https://gnome.pages.gitlab.gnome.org/json-glib/"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-json-glib-1.10.8-2-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-json-glib-1.10.8-2.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-lerc": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-lerc"
+    ],
+    "BASE": [
+      "mingw-w64-lerc"
+    ],
+    "VERSION": [
+      "4.1.1-1"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-lerc-4.1.1-1-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "c0afbf4832488d67030c6f313349cd814946c9a7bc3ae9fd54524825c9ca055d"
+    ],
+    "LICENSE": [
+      "spdx:Apache-2.0"
+    ],
+    "URL": [
+      "https://github.com/Esri/lerc"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-lerc-4.1.1-1-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-lerc-4.1.1-1.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-libadwaita": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-libadwaita"
+    ],
+    "BASE": [
+      "mingw-w64-libadwaita"
+    ],
+    "VERSION": [
+      "1.10.0-2"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-libadwaita-1.10.0-2-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "1e14c2dfa753680d0b3c35fd2f8db147f06144a748d44bf5ac6e77da7efc9ebd"
+    ],
+    "LICENSE": [
+      "spdx:LGPL-2.1-or-later"
+    ],
+    "URL": [
+      "https://gnome.pages.gitlab.gnome.org/libadwaita/"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-libadwaita-1.10.0-2-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-libadwaita-1.10.0-2.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-libb2": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-libb2"
+    ],
+    "BASE": [
+      "mingw-w64-libb2"
+    ],
+    "VERSION": [
+      "0.98.1-3"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-libb2-0.98.1-3-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "dfb554635119d3c46adb00c9d0c589bb38d1cb0781b10ecf31de07ce388bd0c0"
+    ],
+    "LICENSE": [
+      "custom:CC0"
+    ],
+    "URL": [
+      "https://blake2.net/"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-libb2-0.98.1-3-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-libb2-0.98.1-3.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-libdatrie": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-libdatrie"
+    ],
+    "BASE": [
+      "mingw-w64-libdatrie"
+    ],
+    "VERSION": [
+      "0.2.14-1"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-libdatrie-0.2.14-1-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "ea92777801ad325278193a362967540752ae37035016df2f6bcee2d89928a195"
+    ],
+    "LICENSE": [
+      "LGPL"
+    ],
+    "URL": [
+      "https://linux.thai.net/projects/datrie"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-libdatrie-0.2.14-1-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-libdatrie-0.2.14-1.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-libdeflate": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-libdeflate"
+    ],
+    "BASE": [
+      "mingw-w64-libdeflate"
+    ],
+    "VERSION": [
+      "1.26-1"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-libdeflate-1.26-1-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "17720c77bd01641a3554801cafd71d96fb7fff7427f4cc20ac9f36efb8cb3da0"
+    ],
+    "LICENSE": [
+      "spdx:MIT"
+    ],
+    "URL": [
+      "https://github.com/ebiggers/libdeflate"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-libdeflate-1.26-1-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-libdeflate-1.26-1.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-libepoxy": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-libepoxy"
+    ],
+    "BASE": [
+      "mingw-w64-libepoxy"
+    ],
+    "VERSION": [
+      "1.5.10-7"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-libepoxy-1.5.10-7-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "c6c6994e8ec49071f06cc1fae475406bdf17603d4687ad0bcac2e11078cfd7c8"
+    ],
+    "LICENSE": [
+      "spdx:MIT"
+    ],
+    "URL": [
+      "https://github.com/anholt/libepoxy"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-libepoxy-1.5.10-7-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-libepoxy-1.5.10-7.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-libffi": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-libffi"
+    ],
+    "BASE": [
+      "mingw-w64-libffi"
+    ],
+    "VERSION": [
+      "3.8.0-1"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-libffi-3.8.0-1-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "99ad12f4ecfa00a889ef9c5c0188592368a5bac109d0c508ce4e04f29ea95a76"
+    ],
+    "LICENSE": [
+      "spdx:MIT"
+    ],
+    "URL": [
+      "https://sourceware.org/libffi"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-libffi-3.8.0-1-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-libffi-3.8.0-1.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-libgcc": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-libgcc"
+    ],
+    "BASE": [
+      "mingw-w64-gcc"
+    ],
+    "VERSION": [
+      "16.2.0-6"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-libgcc-16.2.0-6-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "80b2497f019977dd9528b1abc8621b1328a0115ab1f724047ccbb56bf323f11d"
+    ],
+    "LICENSE": [
+      "spdx:GPL-3.0-or-later WITH GCC-exception-3.1 AND GFDL-1.3-or-later"
+    ],
+    "URL": [
+      "https://gcc.gnu.org"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-libgcc-16.2.0-6-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-gcc-16.2.0-6.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-libiconv": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-libiconv"
+    ],
+    "BASE": [
+      "mingw-w64-libiconv"
+    ],
+    "VERSION": [
+      "1.19-1"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-libiconv-1.19-1-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "9a500f38c2b91808741c62fae746b3e9110b33a1ecf5c30fa0c66dbedddf7e16"
+    ],
+    "LICENSE": [
+      "spdx:LGPL-2.1-or-later",
+      "documentation:spdx:GPL-3.0-or-later"
+    ],
+    "URL": [
+      "https://www.gnu.org/software/libiconv/"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-libiconv-1.19-1-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-libiconv-1.19-1.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-libidn2": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-libidn2"
+    ],
+    "BASE": [
+      "mingw-w64-libidn2"
+    ],
+    "VERSION": [
+      "2.3.8-4"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-libidn2-2.3.8-4-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "d5f4b5e9d99ff7b2a986d1dc0c73da2bcd93ba68462be7b1debbd6ef76371f57"
+    ],
+    "LICENSE": [
+      "spdx:GPL-2.0-or-later",
+      "spdx:LGPL-3.0-or-later"
+    ],
+    "URL": [
+      "https://www.gnu.org/software/libidn/#libidn2"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-libidn2-2.3.8-4-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-libidn2-2.3.8-4.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-libjpeg-turbo": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-libjpeg-turbo"
+    ],
+    "BASE": [
+      "mingw-w64-libjpeg-turbo"
+    ],
+    "VERSION": [
+      "3.2.1-1"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-libjpeg-turbo-3.2.1-1-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "8eed77c1e0d6de7f8822687f7b1dfa32cda09394806ef67b23399e63de1a92a6"
+    ],
+    "LICENSE": [
+      "custom:BSD-like"
+    ],
+    "URL": [
+      "https://libjpeg-turbo.virtualgl.org/"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-libjpeg-turbo-3.2.1-1-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-libjpeg-turbo-3.2.1-1.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-libnice": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-libnice"
+    ],
+    "BASE": [
+      "mingw-w64-libnice"
+    ],
+    "VERSION": [
+      "0.1.24-1"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-libnice-0.1.24-1-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "081b7c4efd7b413c458ab9e476eff7dfd10800fbcb70ca04c5b16a0da58c06db"
+    ],
+    "LICENSE": [
+      "spdx:LGPL-2.1-only OR MPL-1.1"
+    ],
+    "URL": [
+      "https://libnice.freedesktop.org/"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-libnice-0.1.24-1-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-libnice-0.1.24-1.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-libogg": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-libogg"
+    ],
+    "BASE": [
+      "mingw-w64-libogg"
+    ],
+    "VERSION": [
+      "1.3.6-1"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-libogg-1.3.6-1-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "110a34239e8f122da15e041b2601e2f3c6d4c909d738bdf978700601e0f64449"
+    ],
+    "LICENSE": [
+      "spdx:BSD-3-Clause"
+    ],
+    "URL": [
+      "https://xiph.org/"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-libogg-1.3.6-1-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-libogg-1.3.6-1.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-libpng": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-libpng"
+    ],
+    "BASE": [
+      "mingw-w64-libpng"
+    ],
+    "VERSION": [
+      "1.6.59-2"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-libpng-1.6.59-2-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "6cc296f5029220e1a226c4bc50294212b20ab8fcabeb00b5a002667f4a882edc"
+    ],
+    "LICENSE": [
+      "custom"
+    ],
+    "URL": [
+      "http://www.libpng.org/pub/png/libpng.html"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-libpng-1.6.59-2-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-libpng-1.6.59-2.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-librsvg": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-librsvg"
+    ],
+    "BASE": [
+      "mingw-w64-librsvg"
+    ],
+    "VERSION": [
+      "2.63.4-1"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-librsvg-2.63.4-1-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "a47e66bf8df578990ba4421bb7234e525f32739ede1473323425a62066ce7fe8"
+    ],
+    "LICENSE": [
+      "spdx:LGPL-2.1-or-later"
+    ],
+    "URL": [
+      "https://wiki.gnome.org/Projects/LibRsvg"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-librsvg-2.63.4-1-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-librsvg-2.63.4-1.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-libstdc++": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-libstdc++"
+    ],
+    "BASE": [
+      "mingw-w64-gcc"
+    ],
+    "VERSION": [
+      "16.2.0-6"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-libstdc++-16.2.0-6-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "33c5e58a85a538cf843a8672991cce591f0231d66da3b66a57629712d64be17f"
+    ],
+    "LICENSE": [
+      "spdx:GPL-3.0-or-later WITH GCC-exception-3.1 AND GFDL-1.3-or-later"
+    ],
+    "URL": [
+      "https://gcc.gnu.org"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-libstdc++-16.2.0-6-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-gcc-16.2.0-6.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-libsystre": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-libsystre"
+    ],
+    "BASE": [
+      "mingw-w64-libsystre"
+    ],
+    "VERSION": [
+      "1.0.2-3"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-libsystre-1.0.2-3-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "62f564b1395d4862db1599b77f6588c32de5c80936845751cf369b31eee1560b"
+    ],
+    "LICENSE": [
+      "spdx:BSD-2-Clause"
+    ],
+    "URL": [
+      "https://github.com/msys2/MINGW-packages/tree/master/mingw-w64-libsystre"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-libsystre-1.0.2-3-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-libsystre-1.0.2-3.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-libtasn1": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-libtasn1"
+    ],
+    "BASE": [
+      "mingw-w64-libtasn1"
+    ],
+    "VERSION": [
+      "4.21.0-1"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-libtasn1-4.21.0-1-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "d098b27834c3b25142b6f5aa9a0ca5731a8e4334c232786406cb149dd8bde2ba"
+    ],
+    "LICENSE": [
+      "GPL3, LGPL"
+    ],
+    "URL": [
+      "https://www.gnu.org/software/libtasn1/"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-libtasn1-4.21.0-1-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-libtasn1-4.21.0-1.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-libthai": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-libthai"
+    ],
+    "BASE": [
+      "mingw-w64-libthai"
+    ],
+    "VERSION": [
+      "0.1.30-1"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-libthai-0.1.30-1-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "c90ebbca3e7b4c34f4b3ffa501ba8d00cdaf6340cff7db3c46d79d5e01ef207c"
+    ],
+    "LICENSE": [
+      "spdx:LGPL-2.1-or-later"
+    ],
+    "URL": [
+      "https://linux.thai.net/projects/libthai"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-libthai-0.1.30-1-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-libthai-0.1.30-1.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-libtheora": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-libtheora"
+    ],
+    "BASE": [
+      "mingw-w64-libtheora"
+    ],
+    "VERSION": [
+      "1.2.0-1"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-libtheora-1.2.0-1-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "7c5d7caadc7da0b293ccb3eb8ed9d00f335fd62527a16cfd2a4fddca43d8de11"
+    ],
+    "LICENSE": [
+      "spdx:BSD-3-Clause"
+    ],
+    "URL": [
+      "https://www.theora.org"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-libtheora-1.2.0-1-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-libtheora-1.2.0-1.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-libtiff": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-libtiff"
+    ],
+    "BASE": [
+      "mingw-w64-libtiff"
+    ],
+    "VERSION": [
+      "4.7.2-2"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-libtiff-4.7.2-2-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "258e08a91e6b1703d41730ffe6080c2a40968fe90896b45716c1b41042775076"
+    ],
+    "LICENSE": [
+      "spdx:MIT"
+    ],
+    "URL": [
+      "https://libtiff.gitlab.io/libtiff/"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-libtiff-4.7.2-2-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-libtiff-4.7.2-2.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-libtre": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-libtre"
+    ],
+    "BASE": [
+      "mingw-w64-libtre"
+    ],
+    "VERSION": [
+      "0.9.0-2"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-libtre-0.9.0-2-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "d50f22545c50d7c0cd584474bba83f0c7a2cd8aab1aed1ad6c1f9c6452f3c4fc"
+    ],
+    "LICENSE": [
+      "BSD"
+    ],
+    "URL": [
+      "https://github.com/laurikari/tre"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-libtre-0.9.0-2-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-libtre-0.9.0-2.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-libunistring": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-libunistring"
+    ],
+    "BASE": [
+      "mingw-w64-libunistring"
+    ],
+    "VERSION": [
+      "1.4.2-1"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-libunistring-1.4.2-1-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "e784273da19bbdcc91cbb510b5e27c3ac021b026140734eefcce5ccbd878bd97"
+    ],
+    "LICENSE": [
+      "spdx:LGPL-3.0-or-later OR GPL-3.0-or-later"
+    ],
+    "URL": [
+      "https://www.gnu.org/software/libunistring"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-libunistring-1.4.2-1-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-libunistring-1.4.2-1.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-libva": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-libva"
+    ],
+    "BASE": [
+      "mingw-w64-libva"
+    ],
+    "VERSION": [
+      "2.24.1-1"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-libva-2.24.1-1-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "bd3c2aabe37534f17aaa11a5d846034b56b6890767abcbfb2e8c3fd9153a1a6f"
+    ],
+    "LICENSE": [
+      "spdx:MIT"
+    ],
+    "URL": [
+      "https://intel.github.io/libva/"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-libva-2.24.1-1-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-libva-2.24.1-1.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-libvorbis": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-libvorbis"
+    ],
+    "BASE": [
+      "mingw-w64-libvorbis"
+    ],
+    "VERSION": [
+      "1.3.7-3"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-libvorbis-1.3.7-3-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "d013d2c7489b175299f9ea8bd9b70cf456337943b0f13e6eb470beb6c3fc251f"
+    ],
+    "LICENSE": [
+      "custom"
+    ],
+    "URL": [
+      "https://xiph.org/"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-libvorbis-1.3.7-3-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-libvorbis-1.3.7-3.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-libwebp": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-libwebp"
+    ],
+    "BASE": [
+      "mingw-w64-libwebp"
+    ],
+    "VERSION": [
+      "1.6.0-1"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-libwebp-1.6.0-1-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "34ff8396c403d484c8777ad49ad0fc06dfb94fadf6f14bcf84d50c45bc6fd17e"
+    ],
+    "LICENSE": [
+      "spdx:BSD-3-Clause"
+    ],
+    "URL": [
+      "https://developers.google.com/speed/webp/"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-libwebp-1.6.0-1-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-libwebp-1.6.0-1.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-libwinpthread": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-libwinpthread"
+    ],
+    "BASE": [
+      "mingw-w64-winpthreads"
+    ],
+    "VERSION": [
+      "14.0.0.r598.ge3d18511f-1"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-libwinpthread-14.0.0.r598.ge3d18511f-1-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "c35d6be83d141c8cfbb61f1637dd4b53aac8f5562d766aa26d0741c40bad4e4d"
+    ],
+    "LICENSE": [
+      "spdx:MIT AND BSD-3-Clause"
+    ],
+    "URL": [
+      "https://www.mingw-w64.org/"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-libwinpthread-14.0.0.r598.ge3d18511f-1-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-winpthreads-14.0.0.r598.ge3d18511f-1.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-libxml2": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-libxml2"
+    ],
+    "BASE": [
+      "mingw-w64-libxml2"
+    ],
+    "VERSION": [
+      "2.15.4-3"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-libxml2-2.15.4-3-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "e774c85139c004ce9b4085474d6b3450526c718d2e8c555a87e47adc11f376b1"
+    ],
+    "LICENSE": [
+      "spdx:MIT"
+    ],
+    "URL": [
+      "https://gitlab.gnome.org/GNOME/libxml2/-/wikis/home"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-libxml2-2.15.4-3-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-libxml2-2.15.4-3.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-lzo2": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-lzo2"
+    ],
+    "BASE": [
+      "mingw-w64-lzo2"
+    ],
+    "VERSION": [
+      "2.10-3"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-lzo2-2.10-3-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "717c8065996bea51543518a0d3ab46837bf9a990c41886348bd2fa9484ea23f3"
+    ],
+    "LICENSE": [
+      "spdx:GPL-2.0-or-later"
+    ],
+    "URL": [
+      "https://www.oberhumer.com/opensource/lzo"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-lzo2-2.10-3-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-lzo2-2.10-3.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-mpdecimal": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-mpdecimal"
+    ],
+    "BASE": [
+      "mingw-w64-mpdecimal"
+    ],
+    "VERSION": [
+      "4.0.1-3"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-mpdecimal-4.0.1-3-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "abf25c3869ba5e5bc3b69fdeb6cd49b060fc1a64d0d2de10918adeae9630a68d"
+    ],
+    "LICENSE": [
+      "spdx:BSD-2-Clause"
+    ],
+    "URL": [
+      "https://www.bytereef.org/mpdecimal/index.html"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-mpdecimal-4.0.1-3-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-mpdecimal-4.0.1-3.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-ncurses": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-ncurses"
+    ],
+    "BASE": [
+      "mingw-w64-ncurses"
+    ],
+    "VERSION": [
+      "6.6-4"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-ncurses-6.6-4-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "88331fe78470ef2c5e0280652fee5e10b6dcaa35f8037725c359407f2702309c"
+    ],
+    "LICENSE": [
+      "spdx:MIT"
+    ],
+    "URL": [
+      "https://www.gnu.org/software/ncurses/"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-ncurses-6.6-4-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-ncurses-6.6-4.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-nettle": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-nettle"
+    ],
+    "BASE": [
+      "mingw-w64-nettle"
+    ],
+    "VERSION": [
+      "4.0-1"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-nettle-4.0-1-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "47b49f1723ef2c75ff3042b6e463910c47cdffa3342e175b6409fb9d630e64ed"
+    ],
+    "LICENSE": [
+      "spdx:GPL-2.0-or-later",
+      "spdx:LGPL-3.0-or-later"
+    ],
+    "URL": [
+      "https://www.lysator.liu.se/~nisse/nettle"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-nettle-4.0-1-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-nettle-4.0-1.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-openssl": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-openssl"
+    ],
+    "BASE": [
+      "mingw-w64-openssl"
+    ],
+    "VERSION": [
+      "3.6.5-1"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-openssl-3.6.5-1-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "773e021ebad83f14b5c103db467411e8ff064663e1c7e7f730e2be72f4117064"
+    ],
+    "LICENSE": [
+      "spdx:Apache-2.0"
+    ],
+    "URL": [
+      "https://openssl-library.org"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-openssl-3.6.5-1-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-openssl-3.6.5-1.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-opus": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-opus"
+    ],
+    "BASE": [
+      "mingw-w64-opus"
+    ],
+    "VERSION": [
+      "1.6.1-2"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-opus-1.6.1-2-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "bb114bcf26225f50f874497ebfd6b8224fff2a20bda3f8ee45cd07ce5f02657b"
+    ],
+    "LICENSE": [
+      "spdx:BSD-3-Clause"
+    ],
+    "URL": [
+      "https://www.opus-codec.org/"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-opus-1.6.1-2-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-opus-1.6.1-2.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-orc": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-orc"
+    ],
+    "BASE": [
+      "mingw-w64-orc"
+    ],
+    "VERSION": [
+      "0.4.44-1"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-orc-0.4.44-1-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "f333a8207fbec0178e34d6293e412015c7450e3e73dfa1627279cd922f5d622f"
+    ],
+    "LICENSE": [
+      "custom"
+    ],
+    "URL": [
+      "https://gstreamer.freedesktop.org/projects/orc.html"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-orc-0.4.44-1-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-orc-0.4.44-1.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-p11-kit": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-p11-kit"
+    ],
+    "BASE": [
+      "mingw-w64-p11-kit"
+    ],
+    "VERSION": [
+      "0.26.5-1"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-p11-kit-0.26.5-1-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "6e1645f0afa669f3e3325abb891d79c58dacf0bb5f9bb1ea719d22da1d754e62"
+    ],
+    "LICENSE": [
+      "spdx:BSD-3-Clause"
+    ],
+    "URL": [
+      "https://p11-glue.freedesktop.org/p11-kit.html"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-p11-kit-0.26.5-1-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-p11-kit-0.26.5-1.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-pango": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-pango"
+    ],
+    "BASE": [
+      "mingw-w64-pango"
+    ],
+    "VERSION": [
+      "1.58.2-1"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-pango-1.58.2-1-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "8d86e4a018ff139b010bf357fa1c9f9030fa32ee195c54ed7e89d8ea701851c8"
+    ],
+    "LICENSE": [
+      "spdx:LGPL-2.1"
+    ],
+    "URL": [
+      "https://www.pango.org/"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-pango-1.58.2-1-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-pango-1.58.2-1.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-pcre2": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-pcre2"
+    ],
+    "BASE": [
+      "mingw-w64-pcre2"
+    ],
+    "VERSION": [
+      "10.49-1"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-pcre2-10.49-1-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "63172179db724ac71e2439a7981134c1bcab8049bdddfd349b32b8f76ed52d1e"
+    ],
+    "LICENSE": [
+      "spdx:BSD-3-Clause"
+    ],
+    "URL": [
+      "https://pcre.org/"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-pcre2-10.49-1-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-pcre2-10.49-1.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-pixman": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-pixman"
+    ],
+    "BASE": [
+      "mingw-w64-pixman"
+    ],
+    "VERSION": [
+      "0.46.4-3"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-pixman-0.46.4-3-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "4c01b986563d2b5f7ad6fcec2d0ec9915d2f242ddac5eacddc19971964241cc5"
+    ],
+    "LICENSE": [
+      "spdx:MIT"
+    ],
+    "URL": [
+      "https://gitlab.freedesktop.org/pixman/pixman"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-pixman-0.46.4-3-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-pixman-0.46.4-3.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-python": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-python"
+    ],
+    "BASE": [
+      "mingw-w64-python"
+    ],
+    "VERSION": [
+      "3.14.10-1"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-python-3.14.10-1-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "d9dc11d87d83749a9c02c84cc092503cc04556f6a8e5b21aae60affdee7af7a8"
+    ],
+    "LICENSE": [
+      "spdx:PSF-2.0"
+    ],
+    "URL": [
+      "https://www.python.org/"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-python-3.14.10-1-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-python-3.14.10-1.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-python-packaging": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-python-packaging"
+    ],
+    "BASE": [
+      "mingw-w64-python-packaging"
+    ],
+    "VERSION": [
+      "26.3-1"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-python-packaging-26.3-1-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "b90d1451cfbf015a5334409bd9edf9c61bc0f7b78cac19400b0f92c9279fbaa7"
+    ],
+    "LICENSE": [
+      "spdx:Apache-2.0",
+      "spdx:BSD-2-Clause"
+    ],
+    "URL": [
+      "https://github.com/pypa/packaging"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-python-packaging-26.3-1-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-python-packaging-26.3-1.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-shared-mime-info": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-shared-mime-info"
+    ],
+    "BASE": [
+      "mingw-w64-shared-mime-info"
+    ],
+    "VERSION": [
+      "2.5.1-1"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-shared-mime-info-2.5.1-1-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "71da1e4032374f89e2c9fcfd8f626b5b64e6d359e53235cd9653465e88d435d6"
+    ],
+    "LICENSE": [
+      "spdx:GPL-2.0-or-later"
+    ],
+    "URL": [
+      "https://freedesktop.org/Software/shared-mime-info"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-shared-mime-info-2.5.1-1-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-shared-mime-info-2.5.1-1.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-sqlite3": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-sqlite3"
+    ],
+    "BASE": [
+      "mingw-w64-sqlite3"
+    ],
+    "VERSION": [
+      "3.54.1-1"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-sqlite3-3.54.1-1-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "78dd93bdcc858b051ccd695395284c4a3f4147d54b1d67f54bc85696f45a90c2"
+    ],
+    "LICENSE": [
+      "PublicDomain"
+    ],
+    "URL": [
+      "https://www.sqlite.org/"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-sqlite3-3.54.1-1-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-sqlite3-3.54.1-1.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-tcl": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-tcl"
+    ],
+    "BASE": [
+      "mingw-w64-tcl"
+    ],
+    "VERSION": [
+      "8.6.18-1"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-tcl-8.6.18-1-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "0c3a50ea5be8c5190e58a1fdc46c09f8113ad1b855745875646b7a78a02215df"
+    ],
+    "LICENSE": [
+      "custom"
+    ],
+    "URL": [
+      "https://tcl-lang.org/"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-tcl-8.6.18-1-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-tcl-8.6.18-1.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-tk": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-tk"
+    ],
+    "BASE": [
+      "mingw-w64-tk"
+    ],
+    "VERSION": [
+      "8.6.18-1"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-tk-8.6.18-1-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "bfa011886032962833ddc93ae9b508798ec56625b9093cc6d0ff5c95507c79c6"
+    ],
+    "LICENSE": [
+      "custom"
+    ],
+    "URL": [
+      "https://tcl-lang.org/"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-tk-8.6.18-1-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-tk-8.6.18-1.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-tzdata": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-tzdata"
+    ],
+    "BASE": [
+      "mingw-w64-tzdata"
+    ],
+    "VERSION": [
+      "2026f-1"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-tzdata-2026f-1-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "dd8af2f770b3241d8c299343c12cd4d7e3b94c47195608158d28788a01575323"
+    ],
+    "LICENSE": [
+      "custom: public domain"
+    ],
+    "URL": [
+      "https://www.iana.org/time-zones"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-tzdata-2026f-1-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-tzdata-2026f-1.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-vulkan-loader": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-vulkan-loader"
+    ],
+    "BASE": [
+      "mingw-w64-vulkan-loader"
+    ],
+    "VERSION": [
+      "1~1.4.363.0-1"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-vulkan-loader-1~1.4.363.0-1-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "065076fe13d39ab97eea4740596426d5ae741b5044e48e1c9495d04835c92dbe"
+    ],
+    "LICENSE": [
+      "spdx:Apache-2.0"
+    ],
+    "URL": [
+      "https://www.khronos.org/vulkan/"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-vulkan-loader-1~1.4.363.0-1-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-vulkan-loader-1~1.4.363.0-1.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-wineditline": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-wineditline"
+    ],
+    "BASE": [
+      "mingw-w64-wineditline"
+    ],
+    "VERSION": [
+      "2.208-1"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-wineditline-2.208-1-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "b07b34de1669e16cfd6743691914f5a66ad4013500bbf0e4c7a7644046ae7b1c"
+    ],
+    "LICENSE": [
+      "spdx:BSD-3-Clause"
+    ],
+    "URL": [
+      "https://mingweditline.sourceforge.io/"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-wineditline-2.208-1-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-wineditline-2.208-1.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-xz": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-xz"
+    ],
+    "BASE": [
+      "mingw-w64-xz"
+    ],
+    "VERSION": [
+      "5.8.4-1"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-xz-5.8.4-1-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "a9d771f816d8c0c5bde152ffb27a687ede91079b8e77e5b8297efa3b5a835934"
+    ],
+    "LICENSE": [
+      "spdx:0BSD AND LGPL-2.1-or-later AND GPL-2.0-or-later"
+    ],
+    "URL": [
+      "https://tukaani.org/xz"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-xz-5.8.4-1-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-xz-5.8.4-1.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-zlib": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-zlib"
+    ],
+    "BASE": [
+      "mingw-w64-zlib"
+    ],
+    "VERSION": [
+      "1.3.2-3"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-zlib-1.3.2-3-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "130e6ef04c654fc2150a177600aa5ed0035087665a893479d2c85ba7485d5704"
+    ],
+    "LICENSE": [
+      "spdx:Zlib"
+    ],
+    "URL": [
+      "https://www.zlib.net/"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-zlib-1.3.2-3-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-zlib-1.3.2-3.src.tar.zst"
+  },
+  "mingw-w64-ucrt-x86_64-zstd": {
+    "NAME": [
+      "mingw-w64-ucrt-x86_64-zstd"
+    ],
+    "BASE": [
+      "mingw-w64-zstd"
+    ],
+    "VERSION": [
+      "1.5.7-2"
+    ],
+    "FILENAME": [
+      "mingw-w64-ucrt-x86_64-zstd-1.5.7-2-any.pkg.tar.zst"
+    ],
+    "SHA256SUM": [
+      "dbdb8427280046a2b41697780aa4c52983b708082b0da4755951dc3bea96ca89"
+    ],
+    "LICENSE": [
+      "spdx:BSD-3-Clause OR GPL-2.0-or-later"
+    ],
+    "URL": [
+      "https://facebook.github.io/zstd/"
+    ],
+    "binary_url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-zstd-1.5.7-2-any.pkg.tar.zst",
+    "source_url": "https://repo.msys2.org/mingw/sources/mingw-w64-zstd-1.5.7-2.src.tar.zst"
+  }
+}

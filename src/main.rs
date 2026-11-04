@@ -1,12 +1,20 @@
+#![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
+
+mod bells;
 mod homework;
 mod lessons;
 mod schedule;
 mod settings;
+mod storage;
+#[cfg(target_os = "windows")]
+mod windows;
 
 use adw::prelude::*;
 use schedule::schedule_page;
 use std::cell::RefCell;
 use std::rc::Rc;
+
+const APP_ID: &str = "io.github.sqeezy_53.school-day";
 
 // оформление
 const CSS: &str = r#"
@@ -27,12 +35,27 @@ button.primary:hover { background: alpha(@window_fg_color, 0.15); }
 entry { background: @view_bg_color; color: @view_fg_color; border: 1px solid alpha(@window_fg_color, 0.15); padding: 8px 10px; border-radius: 6px; }
 entry:focus-within { border-color: alpha(@window_fg_color, 0.55); }
 .status { opacity: 0.80; padding-top: 12px; border-top: 1px solid alpha(@window_fg_color, 0.10); }
+.settings-section { padding-top: 20px; border-top: 1px solid alpha(@window_fg_color, 0.10); }
+.settings-title { font-size: 16px; font-weight: 600; }
+.bell-table { padding: 16px; background: @card_bg_color; border: 1px solid alpha(@window_fg_color, 0.10); border-radius: 10px; }
 "#;
 
 fn main() -> gtk::glib::ExitCode {
-    let app = adw::Application::builder()
-        .application_id("io.github.sqeezy.SchoolAppLearning")
-        .build();
+    #[cfg(target_os = "windows")]
+    let _running = match windows::running_guard() {
+        Ok(guard) => guard,
+        Err(error) => {
+            windows::show_error(&error);
+            return gtk::glib::ExitCode::FAILURE;
+        }
+    };
+    #[cfg(target_os = "windows")]
+    if let Err(error) = windows::prepare_runtime() {
+        windows::show_error(&error);
+        return gtk::glib::ExitCode::FAILURE;
+    }
+    gtk::glib::set_application_name("Школьный день");
+    let app = adw::Application::builder().application_id(APP_ID).build();
     app.connect_activate(|app| {
         // Повторный запуск показывает существующее окно с теми же настройками.
         if let Some(window) = app.active_window() {
@@ -45,6 +68,7 @@ fn main() -> gtk::glib::ExitCode {
 }
 
 fn build_window(app: &adw::Application) {
+    gtk::Window::set_default_icon_name(APP_ID);
     let css = gtk::CssProvider::new();
     css.load_from_data(CSS);
     gtk::style_context_add_provider_for_display(

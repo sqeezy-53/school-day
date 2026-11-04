@@ -1,0 +1,15 @@
+School Day / Школьный день
+https://github.com/sqeezy-53/school-day
+
+No open-source license has been selected for the application itself.
+The app metadata therefore uses LicenseRef-proprietary.
+This notice does not change the author's existing rights or grant a new code license.
+
+The application uses third-party Rust crates under their respective licenses.
+Their sources and license files are included in the source archive supplied with this release.
+On Linux, GTK and the other runtime libraries are supplied by the GNOME Flatpak runtime.
+On Windows, the included MSYS2 DLLs have notices under share/licenses. Their matching
+source packages and build recipes accompany the installer in the windows-library-sources archive.
+These libraries are dynamically linked and can be replaced with compatible versions.
+
+The logo is a vector rendition of the book concept selected by the author.

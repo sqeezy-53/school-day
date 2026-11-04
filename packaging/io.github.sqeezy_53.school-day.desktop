@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=School Day
+Name[ru]=Школьный день
+Comment=Lesson schedule and homework
+Comment[ru]=Расписание уроков и домашние задания
+Exec=school-day
+Icon=io.github.sqeezy_53.school-day
+Terminal=false
+Categories=Education;Calendar;
+Keywords=school;lessons;homework;schedule;
+Keywords[ru]=школа;уроки;дз;расписание;
+StartupNotify=true
+StartupWMClass=io.github.sqeezy_53.school-day

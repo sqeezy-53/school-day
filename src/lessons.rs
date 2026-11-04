@@ -18,8 +18,6 @@ pub struct Lesson {
     pub homework_completed: bool,
 }
 
-const FILE: &str = "data/lessons.json";
-
 pub fn parse_lesson(
     title: &str,
     date: &str,
@@ -83,27 +81,24 @@ fn check_slot(items: &[Lesson], lesson: &Lesson, index: Option<usize>) -> Result
 }
 
 pub fn load_lessons() -> Result<Vec<Lesson>, String> {
-    let json = match std::fs::read_to_string(FILE) {
-        Ok(json) => json,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
-        Err(error) => return Err(error.to_string()),
-    };
-    let mut items: Vec<Lesson> = serde_json::from_str(&json).map_err(|error| error.to_string())?;
-    for (index, lesson) in items.iter().enumerate() {
-        validate_lesson(lesson)?;
-        check_slot(&items, lesson, Some(index))?;
-    }
+    let mut items = crate::storage::load_json("lessons.json", |items: &Vec<Lesson>| {
+        validate_lessons(items)
+    })?
+    .unwrap_or_default();
     items.sort_by_key(|lesson| (lesson.date, lesson.time));
     Ok(items)
 }
 
+fn validate_lessons(items: &[Lesson]) -> Result<(), String> {
+    for (index, lesson) in items.iter().enumerate() {
+        validate_lesson(lesson)?;
+        check_slot(items, lesson, Some(index))?;
+    }
+    Ok(())
+}
+
 fn save_lessons(items: &[Lesson]) -> Result<(), String> {
-    let json = serde_json::to_string_pretty(items).map_err(|error| error.to_string())?;
-    std::fs::create_dir_all("data").map_err(|error| error.to_string())?;
-    // Сначала пишем отдельный файл. Старый заменяем только после успешной записи.
-    let temporary = "data/lessons.json.tmp";
-    std::fs::write(temporary, json).map_err(|error| error.to_string())?;
-    std::fs::rename(temporary, FILE).map_err(|error| error.to_string())
+    crate::storage::save_json("lessons.json", items)
 }
 
 pub fn store_lesson(

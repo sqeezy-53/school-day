@@ -1,0 +1,45 @@
+{
+  "app-id": "io.github.sqeezy_53.school-day",
+  "runtime": "org.gnome.Platform",
+  "runtime-version": "51",
+  "sdk": "org.gnome.Sdk",
+  "sdk-extensions": [
+    "org.freedesktop.Sdk.Extension.rust-stable"
+  ],
+  "command": "school-day",
+  "finish-args": [
+    "--share=ipc",
+    "--socket=wayland",
+    "--socket=fallback-x11",
+    "--device=dri"
+  ],
+  "build-options": {
+    "strip": true,
+    "append-path": "/usr/lib/sdk/rust-stable/bin",
+    "env": {
+      "CARGO_HOME": "/run/build/school-day/cargo-home",
+      "CARGO_BUILD_JOBS": "4"
+    }
+  },
+  "modules": [
+    {
+      "name": "school-day",
+      "buildsystem": "simple",
+      "build-commands": [
+        "cargo build --release --offline --locked",
+        "install -Dm755 target/release/school_app_learning /app/bin/school-day",
+        "install -Dm644 packaging/icons/io.github.sqeezy_53.school-day.svg /app/share/icons/hicolor/scalable/apps/io.github.sqeezy_53.school-day.svg",
+        "install -Dm644 packaging/io.github.sqeezy_53.school-day.desktop /app/share/applications/io.github.sqeezy_53.school-day.desktop",
+        "install -Dm644 packaging/io.github.sqeezy_53.school-day.metainfo.xml /app/share/metainfo/io.github.sqeezy_53.school-day.metainfo.xml",
+        "install -Dm644 packaging/NOTICE /app/share/licenses/school-day/NOTICE",
+        "cp -a packaging/third-party-licenses /app/share/licenses/school-day/third-party"
+      ],
+      "sources": [
+        {
+          "type": "dir",
+          "path": "../../"
+        }
+      ]
+    }
+  ]
+}

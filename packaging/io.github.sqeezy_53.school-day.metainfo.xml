@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.sqeezy_53.school-day</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>LicenseRef-proprietary</project_license>
+  <name>School Day</name>
+  <name xml:lang="ru">Школьный день</name>
+  <summary>Keep track of lessons and homework</summary>
+  <summary xml:lang="ru">Расписание уроков и домашние задания</summary>
+  <description>
+    <p>School Day stores your lesson schedule and homework on your computer. Add lessons, choose their times from a bell schedule, and mark homework as completed. The app works offline.</p>
+    <p xml:lang="ru">Добавляйте уроки, выбирайте время по расписанию звонков и отмечайте выполненные задания. Данные хранятся на компьютере. Приложение работает без интернета.</p>
+  </description>
+  <developer id="io.github.sqeezy_53">
+    <name>sqeezy-53</name>
+  </developer>
+  <launchable type="desktop-id">io.github.sqeezy_53.school-day.desktop</launchable>
+  <url type="homepage">https://github.com/sqeezy-53/school-day</url>
+  <url type="bugtracker">https://github.com/sqeezy-53/school-day/issues</url>
+  <url type="vcs-browser">https://github.com/sqeezy-53/school-day</url>
+  <provides>
+    <binary>school-day</binary>
+  </provides>
+  <categories>
+    <category>Education</category>
+    <category>Calendar</category>
+  </categories>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="0.1.0" date="2026-11-04">
+      <description>
+        <p>Lesson schedules, homework, themes and configurable bell times.</p>
+        <p xml:lang="ru">Расписание, домашние задания, темы и настройка звонков.</p>
+      </description>
+    </release>
+  </releases>
+</component>

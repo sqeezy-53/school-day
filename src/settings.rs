@@ -3,6 +3,7 @@ use chrono::NaiveTime;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
+use crate::bells::BellSchedule;
 use crate::{column, field, notify, page, text};
 
 #[derive(Clone, Copy, Default, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -21,6 +22,7 @@ pub struct Settings {
     pub theme: Theme,
     pub light_from: NaiveTime,
     pub dark_from: NaiveTime,
+    pub bells: BellSchedule,
 }
 
 impl Default for Settings {
@@ -30,6 +32,7 @@ impl Default for Settings {
             theme: Theme::Auto,
             light_from: NaiveTime::from_hms_opt(7, 0, 0).unwrap(),
             dark_from: NaiveTime::from_hms_opt(20, 0, 0).unwrap(),
+            bells: BellSchedule::default(),
         }
     }
 }
@@ -58,37 +61,18 @@ fn validate(settings: &Settings) -> Result<(), String> {
         return Err("Время включения тем должно различаться".to_string());
     }
 
+    settings.bells.slots()?;
     Ok(())
 }
 
-fn load_settings() -> Result<Settings, String> {
-    let json = match std::fs::read_to_string("data/settings.json") {
-        Ok(json) => json,
-
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            return Ok(Settings::default());
-        }
-
-        Err(error) => return Err(error.to_string()),
-    };
-
-    let settings: Settings = serde_json::from_str(&json).map_err(|error| error.to_string())?;
-    validate(&settings)?;
-
-    Ok(settings)
+pub fn load_settings() -> Result<Settings, String> {
+    Ok(crate::storage::load_json("settings.json", validate)?.unwrap_or_default())
 }
 
 fn save_settings(settings: &Settings) -> Result<(), String> {
     validate(settings)?;
 
-    let json = serde_json::to_string_pretty(settings).map_err(|error| error.to_string())?;
-
-    std::fs::create_dir_all("data").map_err(|error| error.to_string())?;
-
-    std::fs::write("data/settings.json.tmp", json).map_err(|error| error.to_string())?;
-
-    std::fs::rename("data/settings.json.tmp", "data/settings.json")
-        .map_err(|error| error.to_string())
+    crate::storage::save_json("settings.json", settings)
 }
 
 fn apply_settings(settings: &Settings, brand: &gtk::Label) {
@@ -193,10 +177,7 @@ pub fn settings_page(status: &gtk::Label, brand: &gtk::Label) -> gtk::Box {
 
     page.append(&automatic);
 
-    page.append(&text(
-        "Изменения сохраняются автоматически. Авто использует системное время.",
-        "muted",
-    ));
+    page.append(&text("Сохраняется автоматически", "muted"));
 
     let current = Rc::new(RefCell::new(loaded));
     let saved = Rc::clone(&current);
@@ -271,6 +252,8 @@ pub fn settings_page(status: &gtk::Label, brand: &gtk::Label) -> gtk::Box {
                 0,
             )
             .unwrap(),
+
+            bells: saved.borrow().bells.clone(),
         };
 
         automatic.set_visible(candidate.theme == Theme::Auto);
@@ -304,6 +287,20 @@ pub fn settings_page(status: &gtk::Label, brand: &gtk::Label) -> gtk::Box {
         let callback = Rc::clone(&commit);
         spin.connect_value_changed(move |_| callback());
     }
+
+    let initial_bells = current.borrow().bells.clone();
+    let school_settings = Rc::clone(&current);
+    let weak_status = status.downgrade();
+    page.append(&crate::bells::editor(&initial_bells, move |bells| {
+        let mut candidate = school_settings.borrow().clone();
+        candidate.bells = bells;
+        save_settings(&candidate)?;
+        *school_settings.borrow_mut() = candidate;
+        if let Some(status) = weak_status.upgrade() {
+            notify(&status, "Звонки сохранены");
+        }
+        Ok(())
+    }));
 
     let weak_brand = brand.downgrade();
 

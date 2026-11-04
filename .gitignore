@@ -2,4 +2,8 @@
 /data/
 /learning-backup/
 /design-preview/
+/.build/
+/dist/
 .env
+__pycache__/
+*.pyc

@@ -644,6 +644,7 @@ name = "school_app_learning"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "gdk-pixbuf",
  "gtk4",
  "libadwaita",
  "serde",
