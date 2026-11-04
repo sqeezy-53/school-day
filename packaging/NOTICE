@@ -1,9 +1,12 @@
 School Day / Школьный день
 https://github.com/sqeezy-53/school-day
 
-No open-source license has been selected for the application itself.
-The app metadata therefore uses LicenseRef-proprietary.
-This notice does not change the author's existing rights or grant a new code license.
+Copyright (C) 2026 sqeezy-53
+
+This application is free software: you can redistribute it and/or modify it
+under version 3 of the GNU General Public License (GPL-3.0-only).
+It is distributed WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the accompanying LICENSE.
 
 The application uses third-party Rust crates under their respective licenses.
 Their sources and license files are included in the source archive supplied with this release.

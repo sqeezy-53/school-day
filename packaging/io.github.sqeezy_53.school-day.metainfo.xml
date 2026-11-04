@@ -2,7 +2,7 @@
 <component type="desktop-application">
   <id>io.github.sqeezy_53.school-day</id>
   <metadata_license>CC0-1.0</metadata_license>
-  <project_license>LicenseRef-proprietary</project_license>
+  <project_license>GPL-3.0-only</project_license>
   <name>School Day</name>
   <name xml:lang="ru">Школьный день</name>
   <summary>Keep track of lessons and homework</summary>

@@ -131,6 +131,9 @@ def main():
         shutil.copy2(PROJECT / f"packaging/icons/png/school-day-{size}.png", target)
     shutil.copytree(prefix / "share/licenses", payload / "share/licenses/msys2")
     shutil.copy2(PROJECT / "packaging/NOTICE", payload / "NOTICE")
+    app_licenses = payload / "share/licenses/school-day"
+    app_licenses.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(PROJECT / "LICENSE", app_licenses / "LICENSE")
 
     # Выясняем, какие пакеты предоставили включённые DLL, значки и схемы.
     supplied = {"ucrt64/" + str(p.relative_to(payload)) for p in payload.rglob("*") if p.is_file()}
@@ -171,7 +174,7 @@ def main():
     if snapshot.exists():
         shutil.rmtree(snapshot)
     snapshot.mkdir()
-    for name in ("src", "packaging", "docs", "Cargo.toml", "Cargo.lock", "build.rs", "README.md"):
+    for name in ("src", "packaging", "docs", "Cargo.toml", "Cargo.lock", "build.rs", "README.md", "LICENSE"):
         source = PROJECT / name
         if source.is_dir():
             shutil.copytree(source, snapshot / name, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))

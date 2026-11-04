@@ -32,6 +32,7 @@
         "install -Dm644 packaging/io.github.sqeezy_53.school-day.desktop /app/share/applications/io.github.sqeezy_53.school-day.desktop",
         "install -Dm644 packaging/io.github.sqeezy_53.school-day.metainfo.xml /app/share/metainfo/io.github.sqeezy_53.school-day.metainfo.xml",
         "install -Dm644 packaging/NOTICE /app/share/licenses/school-day/NOTICE",
+        "install -Dm644 LICENSE /app/share/licenses/school-day/LICENSE",
         "cp -a packaging/third-party-licenses /app/share/licenses/school-day/third-party"
       ],
       "sources": [
