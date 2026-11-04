@@ -1,6 +1,7 @@
 mod homework;
 mod lessons;
 mod schedule;
+mod settings;
 
 use adw::prelude::*;
 use schedule::schedule_page;
@@ -9,35 +10,41 @@ use std::rc::Rc;
 
 // оформление
 const CSS: &str = r#"
-window { background: #222225; color: #dedee1; }
-headerbar { background: #28282b; box-shadow: none; border-bottom: 1px solid #303033; min-height: 48px; }
-.brand { font-size: 12px; font-weight: 600; color: #9b9ba2; }
+window { background: @window_bg_color; color: @window_fg_color; }
+headerbar { background: @headerbar_bg_color; box-shadow: none; border-bottom: 1px solid alpha(@window_fg_color, 0.10); min-height: 48px; }
+.brand { font-size: 12px; font-weight: 600; opacity: 0.65; }
 .title { font-size: 23px; font-weight: 600; letter-spacing: -0.4px; }
-.muted { color: #919197; }
+.muted { opacity: 0.60; }
 .section { font-size: 13px; font-weight: 500; }
-.nav { padding: 7px 12px; border-radius: 6px; color: #99999f; }
-.nav:checked { background: #38383d; color: #ededf0; }
-.nav:hover { background: #323236; }
-.panel { padding: 20px 0; border-top: 1px solid #36363b; }
-.empty-icon { color: #77777e; }
+.nav { padding: 7px 12px; border-radius: 6px; color: alpha(@window_fg_color, 0.65); }
+.nav:checked { background: alpha(@window_fg_color, 0.10); color: @window_fg_color; }
+.nav:hover { background: alpha(@window_fg_color, 0.07); }
+.panel { padding: 20px 0; border-top: 1px solid alpha(@window_fg_color, 0.10); }
+.empty-icon { opacity: 0.55; }
 button { box-shadow: none; }
-button.primary { background: #38383e; color: #ededf0; border: 1px solid #4b4b52; padding: 9px 16px; border-radius: 6px; }
-button.primary:hover { background: #424248; }
-entry { background: #262629; border: 1px solid #3d3d43; padding: 8px 10px; border-radius: 6px; }
-entry:focus-within { border-color: #8a8a95; }
-.status { color: #bcbcc4; padding-top: 12px; border-top: 1px solid #36363b; }
+button.primary { background: alpha(@window_fg_color, 0.10); color: @window_fg_color; border: 1px solid alpha(@window_fg_color, 0.18); padding: 9px 16px; border-radius: 6px; }
+button.primary:hover { background: alpha(@window_fg_color, 0.15); }
+entry { background: @view_bg_color; color: @view_fg_color; border: 1px solid alpha(@window_fg_color, 0.15); padding: 8px 10px; border-radius: 6px; }
+entry:focus-within { border-color: alpha(@window_fg_color, 0.55); }
+.status { opacity: 0.80; padding-top: 12px; border-top: 1px solid alpha(@window_fg_color, 0.10); }
 "#;
 
 fn main() -> gtk::glib::ExitCode {
     let app = adw::Application::builder()
         .application_id("io.github.sqeezy.SchoolAppLearning")
         .build();
-    app.connect_activate(build_window);
+    app.connect_activate(|app| {
+        // Повторный запуск показывает существующее окно с теми же настройками.
+        if let Some(window) = app.active_window() {
+            window.present();
+        } else {
+            build_window(app);
+        }
+    });
     app.run()
 }
 
 fn build_window(app: &adw::Application) {
-    adw::StyleManager::default().set_color_scheme(adw::ColorScheme::ForceDark);
     let css = gtk::CssProvider::new();
     css.load_from_data(CSS);
     gtk::style_context_add_provider_for_display(
@@ -78,7 +85,7 @@ fn build_window(app: &adw::Application) {
             }
         }
     }
-    pages.add_named(&settings_page(&status), Some("settings"));
+    pages.add_named(&settings::settings_page(&status, &brand), Some("settings"));
     let navigation = gtk::Box::new(gtk::Orientation::Horizontal, 4);
     header.set_title_widget(Some(&navigation));
     let mut first: Option<gtk::ToggleButton> = None;
@@ -134,24 +141,6 @@ fn build_window(app: &adw::Application) {
         .content(&root)
         .build();
     window.present();
-}
-
-fn settings_page(status: &gtk::Label) -> gtk::Box {
-    let page = page("Настройки");
-    let form = column(16);
-    form.add_css_class("panel");
-    let class = field(&form, "Класс", "Например, 7А");
-    let button = primary("Сохранить");
-    let status = status.clone();
-    button.connect_clicked(move |_| on_save_settings(class.text().as_str(), &status));
-    form.append(&button);
-    page.append(&form);
-    page
-}
-
-fn on_save_settings(class: &str, status: &gtk::Label) {
-    let _ = class;
-    notify(status, "Сохранение настроек пока не сделано")
 }
 
 fn column(spacing: i32) -> gtk::Box {
