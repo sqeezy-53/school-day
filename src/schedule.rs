@@ -351,6 +351,8 @@ fn on_add_lesson(
             Rc::clone(&duration),
         );
         button.connect_clicked(move |_| {
+            // SpinButton может показывать набранный текст, ещё не обновив числовое значение.
+            start.update();
             duration.set(minutes);
             end.set_time(start.time() + chrono::Duration::minutes(minutes));
         });

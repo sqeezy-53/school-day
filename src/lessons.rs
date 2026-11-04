@@ -161,3 +161,35 @@ pub fn set_homework_completed(
 
     Ok(())
 }
+
+pub fn set_homework_text(items: &mut Vec<Lesson>, index: usize, value: &str) -> Result<(), String> {
+    let value = value.trim();
+
+    if value.is_empty() {
+        return Err("Напишите домашнее задание".to_string());
+    }
+
+    let mut updated = items.clone();
+    let lesson = updated.get_mut(index).ok_or("Урок не найден")?;
+
+    if lesson.homework != value {
+        lesson.homework_completed = false;
+    }
+
+    lesson.homework = value.to_string();
+
+    save_lessons(&updated)?;
+    *items = updated;
+
+    Ok(())
+}
+
+pub fn delete_homework(items: &mut Vec<Lesson>, index: usize) -> Result<(), String> {
+    let mut updated = items.clone();
+    let lesson = updated.get_mut(index).ok_or("Урок не найден")?;
+    lesson.homework.clear();
+    lesson.homework_completed = false;
+    save_lessons(&updated)?;
+    *items = updated;
+    Ok(())
+}
