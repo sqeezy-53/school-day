@@ -1,6 +1,6 @@
 use adw::prelude::*;
 use chrono::{Datelike, NaiveDate, NaiveTime, Timelike};
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use crate::bells::Bell;
@@ -386,6 +386,12 @@ fn on_add_lesson(
     let form = column(18);
     margins(&form, 24);
     let title = field(&form, "Предмет", "Например, алгебра");
+    let suggestions = gtk::ListBox::new();
+    suggestions.set_selection_mode(gtk::SelectionMode::Single);
+    suggestions.set_activate_on_single_click(true);
+    suggestions.add_css_class("boxed-list");
+    suggestions.set_visible(false);
+    form.append(&suggestions);
     let date_picker = gtk::Calendar::new();
     select_date(&date_picker, date);
     form.append(&text("Дата", "section"));
@@ -528,6 +534,8 @@ fn on_add_lesson(
         room.set_text(&lesson.room);
         homework.buffer().set_text(&lesson.homework);
     }
+    connect_subject_suggestions(&title, &room, &suggestions, lessons);
+
     let feedback = text("", "muted");
     feedback.set_visible(false);
     for entry in [&title, &room] {
@@ -662,4 +670,114 @@ fn on_add_lesson(
     });
     window.present();
     title_for_focus.grab_focus();
+}
+
+fn connect_subject_suggestions(
+    title: &gtk::Entry,
+    room: &gtk::Entry,
+    suggestions: &gtk::ListBox,
+    lessons: &Lessons,
+) {
+    use gtk::gdk::Key;
+    use gtk::glib::Propagation;
+
+    let mut history = lessons.borrow().clone();
+    history.sort_by_key(|lesson| std::cmp::Reverse((lesson.date, lesson.time)));
+    let mut known = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    for lesson in history {
+        let name = lesson.title.trim().to_string();
+        if !name.is_empty() && seen.insert(name.to_lowercase()) {
+            known.push((name, lesson.room));
+        }
+    }
+
+    let matches = Rc::new(RefCell::new(Vec::<(String, String)>::new()));
+    {
+        let list = suggestions.clone();
+        let matches = Rc::clone(&matches);
+        title.connect_changed(move |title| {
+            while let Some(child) = list.first_child() {
+                list.remove(&child);
+            }
+            matches.borrow_mut().clear();
+            let query = title.text().trim().to_lowercase();
+            if query.is_empty() {
+                list.set_visible(false);
+                return;
+            }
+            let found: Vec<_> = known
+                .iter()
+                .filter(|(name, _)| name.to_lowercase().starts_with(&query))
+                .take(6)
+                .cloned()
+                .collect();
+            for (name, room) in &found {
+                let label = text(&format!("{name} · {room}"), "section");
+                margins(&label, 10);
+                list.append(&label);
+            }
+            let has_matches = !found.is_empty();
+            *matches.borrow_mut() = found;
+            list.select_row(list.row_at_index(0).as_ref());
+            list.set_visible(has_matches);
+        });
+    }
+    {
+        let title = title.downgrade();
+        let room = room.downgrade();
+        let matches = Rc::clone(&matches);
+        suggestions.connect_row_activated(move |list, row| {
+            let chosen = matches.borrow().get(row.index() as usize).cloned();
+            let (Some((name, cabinet)), Some(title), Some(room)) =
+                (chosen, title.upgrade(), room.upgrade())
+            else {
+                return;
+            };
+            title.set_text(&name);
+            title.set_position(-1);
+            if room.text().trim().is_empty() {
+                room.set_text(&cabinet);
+            }
+            list.set_visible(false);
+            title.grab_focus();
+        });
+    }
+
+    let keys = gtk::EventControllerKey::new();
+    keys.set_propagation_phase(gtk::PropagationPhase::Capture);
+    let list = suggestions.clone();
+    keys.connect_key_pressed(move |_, key, _, _| {
+        if !list.is_visible() {
+            return Propagation::Proceed;
+        }
+        match key {
+            Key::Down | Key::Up => {
+                let count = matches.borrow().len() as i32;
+                if count > 0 {
+                    let current = list.selected_row().map_or(0, |row| row.index());
+                    let step = if key == Key::Down { 1 } else { -1 };
+                    let next = (current + step).clamp(0, count - 1);
+                    list.select_row(list.row_at_index(next).as_ref());
+                }
+                Propagation::Stop
+            }
+            Key::Return | Key::KP_Enter => {
+                if let Some(row) = list.selected_row() {
+                    list.emit_by_name::<()>("row-activated", &[&row]);
+                }
+                Propagation::Stop
+            }
+            Key::Escape => {
+                list.set_visible(false);
+                Propagation::Stop
+            }
+            Key::Tab | Key::ISO_Left_Tab => {
+                list.set_visible(false);
+                Propagation::Proceed
+            }
+            _ => Propagation::Proceed,
+        }
+    });
+    title.add_controller(keys);
 }
