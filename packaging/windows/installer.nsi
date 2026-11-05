@@ -3,7 +3,7 @@ Unicode true
 !include "x64.nsh"
 !include "WinVer.nsh"
 !ifndef APP_VERSION
-!define APP_VERSION "0.1.0"
+!define APP_VERSION "0.2.0"
 !endif
 !ifndef PAYLOAD
 !error "Specify PAYLOAD"
@@ -33,7 +33,7 @@ BrandingText "Школьный день"
 !insertmacro MUI_UNPAGE_CONFIRM
 !insertmacro MUI_UNPAGE_INSTFILES
 !insertmacro MUI_LANGUAGE "Russian"
-VIProductVersion "0.1.0.0"
+VIProductVersion "${APP_VERSION}.0"
 VIAddVersionKey /LANG=1049 "ProductName" "Школьный день"
 VIAddVersionKey /LANG=1049 "FileDescription" "Установка приложения Школьный день"
 VIAddVersionKey /LANG=1049 "FileVersion" "${APP_VERSION}"

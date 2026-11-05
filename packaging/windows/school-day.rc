@@ -2,8 +2,8 @@
 1 ICON "packaging/windows/school-day.ico"
 1 RT_MANIFEST "packaging/windows/school-day.manifest"
 1 VERSIONINFO
-FILEVERSION 0,1,0,0
-PRODUCTVERSION 0,1,0,0
+FILEVERSION 0,2,0,0
+PRODUCTVERSION 0,2,0,0
 FILEFLAGSMASK 0x3fL
 FILEFLAGS 0
 FILEOS VOS_NT_WINDOWS32
@@ -15,11 +15,11 @@ BEGIN
     BEGIN
       VALUE "CompanyName", "sqeezy-53\0"
       VALUE "FileDescription", "Школьный день\0"
-      VALUE "FileVersion", "0.1.0\0"
+      VALUE "FileVersion", "0.2.0\0"
       VALUE "InternalName", "school-day\0"
       VALUE "OriginalFilename", "school-day.exe\0"
       VALUE "ProductName", "Школьный день\0"
-      VALUE "ProductVersion", "0.1.0\0"
+      VALUE "ProductVersion", "0.2.0\0"
     END
   END
   BLOCK "VarFileInfo"

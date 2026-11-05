@@ -27,6 +27,12 @@
   </categories>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.2.0" date="2026-11-05">
+      <description>
+        <p>Subject suggestions with keyboard selection, deletion confirmation, and fixes for saving data, themes and long text.</p>
+        <p xml:lang="ru">Подсказки предметов с выбором стрелками, подтверждение удаления и исправления сохранения данных, тем и длинного текста.</p>
+      </description>
+    </release>
     <release version="0.1.0" date="2026-11-04">
       <description>
         <p>Lesson schedules, homework, themes and configurable bell times.</p>
