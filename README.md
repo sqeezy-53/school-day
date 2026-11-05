@@ -17,11 +17,11 @@
 
 ## Установка
 
-**Windows x64:** [скачать установщик](https://github.com/sqeezy-53/school-day/releases/download/v0.1.0/school-day-0.1.0-windows-x64-setup.exe).
+**Windows x64:** [скачать установщик](https://github.com/sqeezy-53/school-day/releases/download/v0.2.0/school-day-0.2.0-windows-x64-setup.exe).
 
-**Linux x86_64:** установите [Flatpak](https://flathub.org/en/setup) и [скачайте пакет](https://github.com/sqeezy-53/school-day/releases/download/v0.1.0/school-day-0.1.0-x86_64.flatpak).
+**Linux x86_64:** установите [Flatpak](https://flathub.org/en/setup) и [скачайте пакет](https://github.com/sqeezy-53/school-day/releases/download/v0.2.0/school-day-0.2.0-x86_64.flatpak).
 
 ```sh
-flatpak install --user ./school-day-0.1.0-x86_64.flatpak
+flatpak install --user ./school-day-0.2.0-x86_64.flatpak
 flatpak run io.github.sqeezy_53.school-day
 ```
