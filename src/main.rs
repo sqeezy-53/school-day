@@ -68,6 +68,32 @@ fn main() -> gtk::glib::ExitCode {
 }
 
 fn build_window(app: &adw::Application) {
+    let data_guard = match storage::lock_data() {
+        Ok(guard) => guard,
+        Err(error) => {
+            let content = column(18);
+            margins(&content, 24);
+            content.append(&text("Не удалось открыть данные", "title"));
+            content.append(&text(&error, "section"));
+            let close = primary("Закрыть");
+            content.append(&close);
+            let window = adw::ApplicationWindow::builder()
+                .application(app)
+                .title("Школьный день")
+                .default_width(520)
+                .default_height(220)
+                .content(&content)
+                .build();
+            let weak_window = window.downgrade();
+            close.connect_clicked(move |_| {
+                if let Some(window) = weak_window.upgrade() {
+                    window.close();
+                }
+            });
+            window.present();
+            return;
+        }
+    };
     gtk::Window::set_default_icon_name(APP_ID);
     let css = gtk::CssProvider::new();
     css.load_from_data(CSS);
@@ -80,6 +106,8 @@ fn build_window(app: &adw::Application) {
     let header = adw::HeaderBar::new();
     let brand = text("Школьный день", "brand");
     brand.set_wrap(false);
+    brand.set_ellipsize(gtk::pango::EllipsizeMode::End);
+    brand.set_max_width_chars(24);
     brand.set_margin_start(10);
     header.pack_start(&brand);
     root.append(&header);
@@ -164,6 +192,9 @@ fn build_window(app: &adw::Application) {
         .default_height(740)
         .content(&root)
         .build();
+    window.connect_destroy(move |_| {
+        let _ = &data_guard;
+    });
     window.present();
 }
 
@@ -175,6 +206,7 @@ fn text(value: &str, style: &str) -> gtk::Label {
     let label = gtk::Label::new(Some(value));
     label.set_xalign(0.0);
     label.set_wrap(true);
+    label.set_wrap_mode(gtk::pango::WrapMode::WordChar);
     label.add_css_class(style);
     label
 }
@@ -226,4 +258,62 @@ fn primary(title: &str) -> gtk::Button {
 fn notify(status: &gtk::Label, message: &str) {
     status.set_text(message);
     status.set_visible(true);
+}
+
+fn confirm_delete(status: &gtk::Label, heading: &str, body: &str, confirm: impl Fn() + 'static) {
+    let Some(parent) = status
+        .root()
+        .and_then(|root| root.downcast::<gtk::Window>().ok())
+    else {
+        return;
+    };
+    let content = column(18);
+    margins(&content, 24);
+    content.append(&text(heading, "settings-title"));
+    content.append(&text(body, "section"));
+    let actions = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+    actions.set_halign(gtk::Align::End);
+    let cancel = gtk::Button::with_label("Отмена");
+    let delete = gtk::Button::with_label("Удалить");
+    delete.add_css_class("destructive-action");
+    actions.append(&cancel);
+    actions.append(&delete);
+    content.append(&actions);
+    let window = adw::Window::builder()
+        .title(heading)
+        .default_width(420)
+        .resizable(false)
+        .modal(true)
+        .transient_for(&parent)
+        .content(&content)
+        .build();
+    window.set_destroy_with_parent(true);
+    let weak = window.downgrade();
+    cancel.connect_clicked(move |_| {
+        if let Some(window) = weak.upgrade() {
+            window.close();
+        }
+    });
+    let weak = window.downgrade();
+    delete.connect_clicked(move |_| {
+        confirm();
+        if let Some(window) = weak.upgrade() {
+            window.close();
+        }
+    });
+    let keys = gtk::EventControllerKey::new();
+    let weak = window.downgrade();
+    keys.connect_key_pressed(move |_, key, _, _| {
+        if key == gtk::gdk::Key::Escape {
+            if let Some(window) = weak.upgrade() {
+                window.close();
+            }
+            gtk::glib::Propagation::Stop
+        } else {
+            gtk::glib::Propagation::Proceed
+        }
+    });
+    window.add_controller(keys);
+    window.present();
+    cancel.grab_focus();
 }

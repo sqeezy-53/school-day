@@ -196,14 +196,26 @@ fn render_lessons(
                 if editing {
                     on_add_lesson(&status, &items, &list, &calendar, Some(index));
                 } else {
-                    let result = delete_lesson(&mut items.borrow_mut(), index);
-                    match result {
-                        Ok(()) => {
-                            render_lessons(&list, &items, &calendar, &status);
-                            notify(&status, "Урок удалён");
-                        }
-                        Err(error) => notify(&status, &format!("Не удалось удалить урок: {error}")),
-                    }
+                    let items = Rc::clone(&items);
+                    let calendar = calendar.clone();
+                    let feedback = status.clone();
+                    crate::confirm_delete(
+                        &status,
+                        "Удалить урок?",
+                        "Урок и его домашнее задание будут удалены.",
+                        move || {
+                            let result = delete_lesson(&mut items.borrow_mut(), index);
+                            match result {
+                                Ok(()) => {
+                                    render_lessons(&list, &items, &calendar, &feedback);
+                                    notify(&feedback, "Урок удалён");
+                                }
+                                Err(error) => {
+                                    notify(&feedback, &format!("Не удалось удалить урок: {error}"))
+                                }
+                            }
+                        },
+                    );
                 }
             });
             row.append(&button);

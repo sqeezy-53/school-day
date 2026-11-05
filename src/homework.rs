@@ -94,19 +94,26 @@ fn render_homework(list: &gtk::Box, lessons: &Lessons, status: &gtk::Label) {
         let status_for_delete = status.clone();
         let list_for_delete = list.downgrade();
         delete.connect_clicked(move |_| {
-            let result = delete_homework(&mut items_for_delete.borrow_mut(), index);
-            match result {
-                Ok(()) => {
-                    if let Some(list) = list_for_delete.upgrade() {
-                        render_homework(&list, &items_for_delete, &status_for_delete);
+            let items = Rc::clone(&items_for_delete);
+            let feedback = status_for_delete.clone();
+            let list = list_for_delete.clone();
+            crate::confirm_delete(
+                &status_for_delete,
+                "Удалить домашнее задание?",
+                "Сам урок останется в расписании.",
+                move || {
+                    let result = delete_homework(&mut items.borrow_mut(), index);
+                    match result {
+                        Ok(()) => {
+                            if let Some(list) = list.upgrade() {
+                                render_homework(&list, &items, &feedback);
+                            }
+                            notify(&feedback, "Домашнее задание удалено");
+                        }
+                        Err(error) => notify(&feedback, &format!("Не удалось удалить ДЗ: {error}")),
                     }
-                    notify(&status_for_delete, "Домашнее задание удалено");
-                }
-                Err(error) => notify(
-                    &status_for_delete,
-                    &format!("Не удалось удалить ДЗ: {error}"),
-                ),
-            }
+                },
+            );
         });
 
         let items = Rc::clone(lessons);

@@ -57,7 +57,7 @@ impl Settings {
 }
 
 fn validate(settings: &Settings) -> Result<(), String> {
-    if settings.light_from == settings.dark_from {
+    if settings.theme == Theme::Auto && settings.light_from == settings.dark_from {
         return Err("Время включения тем должно различаться".to_string());
     }
 
@@ -91,6 +91,7 @@ fn apply_settings(settings: &Settings, brand: &gtk::Label) {
     };
 
     brand.set_text(&title);
+    brand.set_tooltip_text(Some(&title));
 }
 
 fn time_field(title: &str, value: NaiveTime) -> (gtk::Box, gtk::SpinButton, gtk::SpinButton) {
@@ -315,4 +316,50 @@ pub fn settings_page(status: &gtk::Label, brand: &gtk::Label) -> gtk::Box {
     });
 
     page
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn equal_automatic_times_do_not_block_manual_themes() {
+        for theme in [Theme::Light, Theme::Dark] {
+            let settings = Settings {
+                theme,
+                light_from: NaiveTime::from_hms_opt(20, 0, 0).unwrap(),
+                ..Settings::default()
+            };
+            assert!(validate(&settings).is_ok());
+        }
+        let automatic = Settings {
+            light_from: NaiveTime::from_hms_opt(20, 0, 0).unwrap(),
+            ..Settings::default()
+        };
+        assert!(validate(&automatic).is_err());
+    }
+
+    #[test]
+    fn automatic_theme_changes_at_both_boundaries() {
+        let settings = Settings::default();
+        for (hour, minute, expected_dark) in
+            [(6, 59, true), (7, 0, false), (19, 59, false), (20, 0, true)]
+        {
+            assert_eq!(
+                settings.is_dark_at(NaiveTime::from_hms_opt(hour, minute, 0).unwrap()),
+                expected_dark
+            );
+        }
+    }
+
+    #[test]
+    fn light_period_can_cross_midnight() {
+        let settings = Settings {
+            light_from: NaiveTime::from_hms_opt(20, 0, 0).unwrap(),
+            dark_from: NaiveTime::from_hms_opt(7, 0, 0).unwrap(),
+            ..Settings::default()
+        };
+        assert!(!settings.is_dark_at(NaiveTime::from_hms_opt(23, 0, 0).unwrap()));
+        assert!(settings.is_dark_at(NaiveTime::from_hms_opt(12, 0, 0).unwrap()));
+    }
 }
