@@ -30,7 +30,10 @@ const CSS: &str = r#"
 .tutorial-kicker { color: @window_fg_color; font-size: 12px; font-weight: 700; }
 .tutorial-title { font-size: 21px; font-weight: 700; }
 .tutorial-description { color: alpha(@window_fg_color, 0.82); }
-.tutorial-actions button { border-radius: 8px; }
+.tutorial-actions button { border-radius: 8px; min-width: 0; padding: 6px 8px; }
+.compact-layout .tutorial-card { padding: 12px; }
+.compact-layout .tutorial-icon { padding: 5px; }
+.compact-layout .tutorial-title { font-size: 18px; }
 "#;
 
 #[derive(Clone, Copy)]
@@ -195,6 +198,7 @@ struct Tour {
     kicker: gtk::Label,
     title: gtk::Label,
     description: gtk::Label,
+    instructions_scroll: gtk::ScrolledWindow,
     hint: gtk::Label,
     progress: gtk::ProgressBar,
     back: gtk::Button,
@@ -234,14 +238,23 @@ pub fn install(
     kicker.set_wrap(false);
     header.append(&icon);
     header.append(&kicker);
-    card.append(&header);
 
     let title = text("", "tutorial-title");
     let description = text("", "tutorial-description");
     let hint = text("", "muted");
-    card.append(&title);
-    card.append(&description);
-    card.append(&hint);
+    let instructions = column(12);
+    instructions.append(&header);
+    instructions.append(&title);
+    instructions.append(&description);
+    instructions.append(&hint);
+    let instructions_scroll = gtk::ScrolledWindow::new();
+    instructions_scroll.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Automatic);
+    instructions_scroll.set_overlay_scrolling(false);
+    instructions_scroll.set_propagate_natural_height(true);
+    instructions_scroll.set_min_content_height(32);
+    instructions_scroll.set_vexpand(true);
+    instructions_scroll.set_child(Some(&instructions));
+    card.append(&instructions_scroll);
 
     let progress = gtk::ProgressBar::new();
     card.append(&progress);
@@ -261,6 +274,7 @@ pub fn install(
     actions.append(&next);
     card.append(&actions);
     overlay.add_overlay(&card);
+    overlay.set_measure_overlay(&card, true);
 
     let tour = Rc::new(Tour {
         window: window.downgrade(),
@@ -279,6 +293,7 @@ pub fn install(
         kicker,
         title,
         description,
+        instructions_scroll,
         hint,
         progress,
         back,
@@ -466,6 +481,7 @@ impl Tour {
         };
         self.hint.set_text(hint);
         self.hint.set_visible(!hint.is_empty());
+        self.instructions_scroll.vadjustment().set_value(0.0);
         self.back.set_visible(previous);
         self.next.set_label(if exercise.is_some() {
             "Попробовать"
@@ -695,7 +711,12 @@ impl Tour {
         let minimum_width = self.card.measure(gtk::Orientation::Horizontal, -1).0;
         let available_width = (overlay.width() - 2 * EDGE).max(minimum_width);
         let mut width = CARD_WIDTH.max(minimum_width).min(available_width);
-        let (_, mut height, _, _) = self.card.measure(gtk::Orientation::Vertical, width);
+        let available_height = overlay.height() - 2 * EDGE;
+        let card_height = |width| {
+            let (minimum, natural, _, _) = self.card.measure(gtk::Orientation::Vertical, width);
+            natural.min(available_height.max(minimum))
+        };
+        let mut height = card_height(width);
         let mut x = (overlay.width() - width) / 2;
         let mut y = (overlay.height() - height) / 2;
         if let Some(target) = self.target_bounds(overlay) {
@@ -714,13 +735,22 @@ impl Tour {
                     let room = room_on_right.max(room_on_left);
                     if room >= minimum_width {
                         width = width.min(room);
-                        height = self.card.measure(gtk::Orientation::Vertical, width).1;
+                        height = card_height(width);
                         x = if room_on_right >= room_on_left {
                             right
                         } else {
                             left - width
                         };
                         y = (target.y() + target.height() / 2.0).round() as i32 - height / 2;
+                    } else {
+                        let above = target.y().floor() as i32 - GAP - EDGE;
+                        let below_room = overlay.height() - EDGE - below;
+                        let room = above.max(below_room);
+                        let minimum = self.card.measure(gtk::Orientation::Vertical, width).0;
+                        if room >= minimum {
+                            height = room;
+                            y = if below_room >= above { below } else { EDGE };
+                        }
                     }
                 }
             }

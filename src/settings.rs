@@ -222,7 +222,9 @@ fn settings_form(status: &gtk::Label, brand: &gtk::Label, container: &gtk::Box) 
 
     page.append(&theme);
 
-    let automatic = gtk::Box::new(gtk::Orientation::Horizontal, 24);
+    let automatic = adw::WrapBox::new();
+    automatic.set_child_spacing(24);
+    automatic.set_line_spacing(12);
 
     let (light_group, light_hour, light_minute) = time_field("Светлая с", loaded.light_from);
 

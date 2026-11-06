@@ -232,7 +232,9 @@ pub fn editor(
     title.set_halign(gtk::Align::Start);
     crate::tutorial::Anchor::Bells.mark(&title);
     root.append(&title);
-    let controls = gtk::Box::new(gtk::Orientation::Horizontal, 20);
+    let controls = adw::WrapBox::new();
+    controls.set_child_spacing(16);
+    controls.set_line_spacing(12);
     let length_group = column(8);
     length_group.set_hexpand(true);
     length_group.append(&text("Длительность", "section"));
@@ -263,7 +265,7 @@ pub fn editor(
     feedback.set_visible(false);
     root.append(&feedback);
     let grid = gtk::Grid::new();
-    grid.set_column_spacing(24);
+    grid.set_column_spacing(10);
     grid.set_row_spacing(8);
     grid.add_css_class("bell-table");
     root.append(&grid);

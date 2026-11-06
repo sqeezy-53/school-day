@@ -37,7 +37,7 @@ entry:focus-within { border-color: alpha(@window_fg_color, 0.55); }
 .status { opacity: 0.80; padding-top: 12px; border-top: 1px solid alpha(@window_fg_color, 0.10); }
 .settings-section { padding-top: 20px; border-top: 1px solid alpha(@window_fg_color, 0.10); }
 .settings-title { font-size: 16px; font-weight: 600; }
-.bell-table { padding: 16px; background: @card_bg_color; border: 1px solid alpha(@window_fg_color, 0.10); border-radius: 10px; }
+.bell-table { padding: 12px; background: @card_bg_color; border: 1px solid alpha(@window_fg_color, 0.10); border-radius: 10px; }
 "#;
 
 fn main() -> gtk::glib::ExitCode {
@@ -104,14 +104,34 @@ fn build_window(app: &adw::Application) {
     );
     let root = column(0);
     let header = adw::HeaderBar::new();
+    if let Some(layout) =
+        gtk::Settings::default().and_then(|settings| settings.gtk_decoration_layout())
+    {
+        let layout = layout
+            .split(':')
+            .map(|side| {
+                side.split(',')
+                    .filter(|item| !matches!(item.trim(), "icon" | "menu"))
+                    .collect::<Vec<_>>()
+                    .join(",")
+            })
+            .collect::<Vec<_>>()
+            .join(":");
+        header.set_decoration_layout(Some(&layout));
+    }
     let brand = text("Школьный день", "brand");
     brand.set_wrap(false);
     brand.set_ellipsize(gtk::pango::EllipsizeMode::End);
     brand.set_max_width_chars(24);
+    brand.set_tooltip_text(Some("Школьный день"));
     let identity = gtk::Box::new(gtk::Orientation::Horizontal, 8);
     identity.set_margin_start(10);
     identity.append(&brand_logo());
     identity.append(&brand);
+    brand
+        .bind_property("tooltip-text", &identity, "tooltip-text")
+        .sync_create()
+        .build();
     header.pack_start(&identity);
     root.append(&header);
 
@@ -145,6 +165,12 @@ fn build_window(app: &adw::Application) {
     pages.add_named(&settings::settings_page(&status, &brand), Some("settings"));
     let navigation = gtk::Box::new(gtk::Orientation::Horizontal, 4);
     header.set_title_widget(Some(&navigation));
+    let compact = adw::Breakpoint::new(adw::BreakpointCondition::new_length(
+        adw::BreakpointConditionLengthType::MaxWidth,
+        640.0,
+        adw::LengthUnit::Px,
+    ));
+    compact.add_setter(&brand, "visible", Some(&false.to_value()));
     let mut first: Option<gtk::ToggleButton> = None;
     let tabs = [
         ("schedule", "Расписание", "x-office-calendar-symbolic"),
@@ -153,9 +179,14 @@ fn build_window(app: &adw::Application) {
     ]
     .map(|(name, title, icon)| {
         let button = gtk::ToggleButton::new();
+        button.set_tooltip_text(Some(title));
         let row = gtk::Box::new(gtk::Orientation::Horizontal, 12);
         row.append(&gtk::Image::from_icon_name(icon));
-        row.append(&text(title, "section"));
+        let label = text(title, "section");
+        label.set_wrap(false);
+        label.set_ellipsize(gtk::pango::EllipsizeMode::End);
+        compact.add_setter(&label, "visible", Some(&false.to_value()));
+        row.append(&label);
         button.set_child(Some(&row));
         button.add_css_class("flat");
         button.add_css_class("nav");
@@ -178,6 +209,9 @@ fn build_window(app: &adw::Application) {
     });
     let workspace = column(18);
     margins(&workspace, 32);
+    for margin in ["margin-start", "margin-end", "margin-top", "margin-bottom"] {
+        compact.add_setter(&workspace, margin, Some(&16.to_value()));
+    }
     workspace.set_valign(gtk::Align::Center);
     workspace.set_vexpand(true);
     workspace.append(&pages);
@@ -187,20 +221,35 @@ fn build_window(app: &adw::Application) {
     clamp.set_tightening_threshold(500);
     clamp.set_child(Some(&workspace));
     let scroll = gtk::ScrolledWindow::new();
-    scroll.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Automatic);
+    scroll.set_policy(gtk::PolicyType::Automatic, gtk::PolicyType::Automatic);
     scroll.set_hexpand(true);
     scroll.set_vexpand(true);
     scroll.set_child(Some(&clamp));
+    let weak_scroll = scroll.downgrade();
+    pages.connect_visible_child_notify(move |_| {
+        if let Some(scroll) = weak_scroll.upgrade() {
+            scroll.vadjustment().set_value(0.0);
+            scroll.hadjustment().set_value(0.0);
+        }
+    });
     root.append(&scroll);
     let overlay = gtk::Overlay::new();
     overlay.set_child(Some(&root));
+    compact.add_setter(
+        &overlay,
+        "css-classes",
+        Some(&gtk::glib::StrV::from(["compact-layout"]).to_value()),
+    );
     let window = adw::ApplicationWindow::builder()
         .application(app)
         .title("Школьный день")
         .default_width(1040)
         .default_height(740)
+        .width_request(360)
+        .height_request(320)
         .content(&overlay)
         .build();
+    window.add_breakpoint(compact);
     window.connect_destroy(move |_| {
         let _ = &data_guard;
     });

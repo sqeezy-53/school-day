@@ -17,7 +17,12 @@ pub fn schedule_page(status: &gtk::Label, lessons: Lessons) -> gtk::Box {
     let list = column(0);
     render_lessons(&list, &lessons, &calendar, status);
 
-    let toolbar = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+    let toolbar = adw::WrapBox::new();
+    toolbar.set_child_spacing(8);
+    toolbar.set_line_spacing(8);
+    toolbar.set_justify(adw::JustifyMode::Spread);
+    toolbar.set_justify_last_line(true);
+    let date_controls = gtk::Box::new(gtk::Orientation::Horizontal, 6);
     for (icon, offset, label) in [
         ("go-previous-symbolic", -1, "Предыдущий день"),
         ("go-next-symbolic", 1, "Следующий день"),
@@ -31,9 +36,9 @@ pub fn schedule_page(status: &gtk::Label, lessons: Lessons) -> gtk::Box {
                 calendar.select_day(&day);
             }
         });
-        toolbar.append(&button);
+        date_controls.append(&button);
         if offset == -1 {
-            toolbar.append(&date);
+            date_controls.append(&date);
         }
     }
     let today = gtk::Button::with_label("Сегодня");
@@ -45,10 +50,8 @@ pub fn schedule_page(status: &gtk::Label, lessons: Lessons) -> gtk::Box {
             calendar_for_today.select_day(&now);
         }
     });
-    toolbar.append(&today);
-    let spacer = column(0);
-    spacer.set_hexpand(true);
-    toolbar.append(&spacer);
+    date_controls.append(&today);
+    toolbar.append(&date_controls);
     let add = primary("Добавить урок");
     Anchor::AddLesson.mark(&add);
     let (items, calendar_for_add, status_for_add, weak_list) = (
@@ -357,24 +360,18 @@ fn suggested_time(
             return (None, start, end);
         }
     }
-    let mut start = bells[0].start;
-    for lesson in day() {
-        if let Some(end) = end_for(start)
-            && end <= lesson.time
-        {
+    for mut start in [bells[0].start, NaiveTime::MIN] {
+        for lesson in day() {
+            if let Some(end) = end_for(start)
+                && end <= lesson.time
+            {
+                return (None, start, end);
+            }
+            start = start.max(lesson.end);
+        }
+        if let Some(end) = end_for(start) {
             return (None, start, end);
         }
-        start = start.max(lesson.end);
-    }
-    if let Some(end) = end_for(start) {
-        return (None, start, end);
-    }
-    let midnight = NaiveTime::MIN;
-    if let Some(first) = day().next()
-        && let Some(end) = end_for(midnight)
-        && end <= first.time
-    {
-        return (None, midnight, end);
     }
     (None, bells[0].start, bells[0].end)
 }
@@ -878,4 +875,23 @@ fn connect_subject_suggestions(
         }
     });
     title.add_controller(keys);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn suggests_a_free_interval_between_lessons_before_the_first_bell() {
+        let date = NaiveDate::from_ymd_opt(2026, 11, 6).unwrap();
+        let items = [
+            parse_lesson("Первый", "06.11.2026", "00:00", "01:00", "1").unwrap(),
+            parse_lesson("Второй", "06.11.2026", "08:00", "23:55", "1").unwrap(),
+        ];
+        let bells = crate::bells::BellSchedule::default().slots().unwrap();
+        let (slot, start, end) = suggested_time(&items, date, &bells, 40);
+        assert_eq!(slot, None);
+        assert_eq!(start, NaiveTime::from_hms_opt(1, 0, 0).unwrap());
+        assert_eq!(end, NaiveTime::from_hms_opt(1, 40, 0).unwrap());
+    }
 }
