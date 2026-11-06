@@ -4,7 +4,7 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use crate::bells::BellSchedule;
-use crate::{column, field, notify, page, text};
+use crate::{column, field, notify, page, primary, text};
 
 #[derive(Clone, Copy, Default, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -57,6 +57,9 @@ impl Settings {
 }
 
 fn validate(settings: &Settings) -> Result<(), String> {
+    if settings.class.contains('\0') {
+        return Err("В названии класса есть недопустимый нулевой символ".to_string());
+    }
     if settings.theme == Theme::Auto && settings.light_from == settings.dark_from {
         return Err("Время включения тем должно различаться".to_string());
     }
@@ -66,7 +69,10 @@ fn validate(settings: &Settings) -> Result<(), String> {
 }
 
 pub fn load_settings() -> Result<Settings, String> {
-    Ok(crate::storage::load_json("settings.json", validate)?.unwrap_or_default())
+    Ok(
+        crate::storage::load_json("settings.json", |settings| validate(settings))?
+            .unwrap_or_default(),
+    )
 }
 
 fn save_settings(settings: &Settings) -> Result<(), String> {
@@ -134,6 +140,12 @@ fn time_number(maximum: f64, value: u32, label: &str) -> gtk::SpinButton {
 }
 
 pub fn settings_page(status: &gtk::Label, brand: &gtk::Label) -> gtk::Box {
+    let container = column(0);
+    container.append(&settings_form(status, brand, &container));
+    container
+}
+
+fn settings_form(status: &gtk::Label, brand: &gtk::Label, container: &gtk::Box) -> gtk::Box {
     let page = page("Настройки");
 
     let loaded = match load_settings() {
@@ -144,6 +156,36 @@ pub fn settings_page(status: &gtk::Label, brand: &gtk::Label) -> gtk::Box {
                 &format!("Не удалось загрузить настройки: {error}"),
                 "muted",
             ));
+            let reset = primary("Восстановить настройки по умолчанию");
+            let (status, brand, container) = (status.clone(), brand.clone(), container.downgrade());
+            reset.connect_clicked(move |_| {
+                let Some(container) = container.upgrade() else {
+                    return;
+                };
+                match crate::storage::reset_json("settings.json", &Settings::default()) {
+                    Ok(backup) => {
+                        while let Some(child) = container.first_child() {
+                            container.remove(&child);
+                        }
+                        container.append(&settings_form(&status, &brand, &container));
+                        let message = backup.map_or_else(
+                            || "Настройки восстановлены".to_string(),
+                            |path| {
+                                format!(
+                                    "Настройки восстановлены. Копия прежних настроек: {}",
+                                    path.display()
+                                )
+                            },
+                        );
+                        notify(&status, &message);
+                    }
+                    Err(error) => notify(
+                        &status,
+                        &format!("Не удалось восстановить настройки: {error}"),
+                    ),
+                }
+            });
+            page.append(&reset);
 
             return page;
         }

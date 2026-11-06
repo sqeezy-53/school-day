@@ -2,13 +2,13 @@
 
 Установщик x64 с GTK и libadwaita. Установка для текущего пользователя, без прав администратора. Данные находятся отдельно от программы.
 
-На Linux нужны Rust с целью `x86_64-pc-windows-gnu`, MinGW-w64, NSIS, Python 3.11+, `bsdtar`, `pkg-config` и `glib-compile-schemas`.
+На Linux нужны Rust с целью `x86_64-pc-windows-gnu`, MinGW-w64, NSIS, Python 3.11+, `make`, `bsdtar`, `pkg-config` и `glib-compile-schemas`.
 
 ```sh
 rustup target add x86_64-pc-windows-gnu
 python packaging/build-windows.py \
   --work-dir /mnt/gamedisk/school-day-windows \
-  --output-dir /mnt/gamedisk/school-day-release/v0.1.0 \
+  --output-dir /mnt/gamedisk/school-day-windows/artifacts \
   --cross-bin /usr/bin \
   --makensis /usr/bin/makensis \
   --nsis-dir /usr/share/nsis
@@ -16,7 +16,7 @@ python packaging/build-windows.py \
 
 Если инструменты распакованы отдельно, укажите их фактические пути. Системная установка GTK для сборки Windows не используется.
 
-Версии и контрольные суммы MSYS2 зафиксированы в `msys2-lock.json`. Скрипт загружает библиотеки, собирает приложение, находит зависимости DLL и создаёт установщик. Значки SVG подключаются с учётом папки установки.
+Версии и контрольные суммы бинарных и исходных пакетов MSYS2 зафиксированы в `msys2-lock.json`. zlib 1.4 собирается из исходного архива проекта zlib с проверкой SHA-256. Каждая сборка распаковывает библиотеки в отдельный временный каталог. Деинсталлятор удаляет файлы из списка, созданного при сборке установщика.
 
 В результат входят установщик, исходники приложения с зависимостями Rust, исходники поставляемых библиотек, `SOURCE-windows.json` и `SHA256SUMS-windows`. Файлы из `data` и личные настройки не включаются.
 

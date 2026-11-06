@@ -54,6 +54,12 @@ pub fn parse_lesson(
 }
 
 fn validate_lesson(lesson: &Lesson) -> Result<(), String> {
+    if [&lesson.title, &lesson.room, &lesson.homework]
+        .iter()
+        .any(|text| text.contains('\0'))
+    {
+        return Err("В данных урока есть недопустимый нулевой символ".to_string());
+    }
     if lesson.title.trim().is_empty() || lesson.room.trim().is_empty() {
         return Err("У урока должны быть предмет и кабинет".to_string());
     }
@@ -69,30 +75,39 @@ fn check_slot(items: &[Lesson], lesson: &Lesson, index: Option<usize>) -> Result
             continue;
         }
         if other.time < lesson.end && lesson.time < other.end {
-            return Err(format!(
-                "В это время уже есть {} ({}–{})",
-                other.title,
-                other.time.format("%H:%M"),
-                other.end.format("%H:%M"),
-            ));
+            return Err(slot_conflict(other));
         }
     }
     Ok(())
 }
 
-pub fn load_lessons() -> Result<Vec<Lesson>, String> {
-    let mut items = crate::storage::load_json("lessons.json", |items: &Vec<Lesson>| {
-        validate_lessons(items)
-    })?
-    .unwrap_or_default();
-    items.sort_by_key(|lesson| (lesson.date, lesson.time));
-    Ok(items)
+fn slot_conflict(lesson: &Lesson) -> String {
+    format!(
+        "В это время уже есть {} ({}–{})",
+        lesson.title,
+        lesson.time.format("%H:%M"),
+        lesson.end.format("%H:%M"),
+    )
 }
 
-fn validate_lessons(items: &[Lesson]) -> Result<(), String> {
-    for (index, lesson) in items.iter().enumerate() {
+pub fn load_lessons() -> Result<Vec<Lesson>, String> {
+    Ok(
+        crate::storage::load_json("lessons.json", |items: &mut Vec<Lesson>| {
+            items.sort_by_key(|lesson| (lesson.date, lesson.time));
+            validate_sorted_lessons(items)
+        })?
+        .unwrap_or_default(),
+    )
+}
+
+fn validate_sorted_lessons(items: &[Lesson]) -> Result<(), String> {
+    for lesson in items {
         validate_lesson(lesson)?;
-        check_slot(items, lesson, Some(index))?;
+    }
+    for pair in items.windows(2) {
+        if pair[0].date == pair[1].date && pair[0].end > pair[1].time {
+            return Err(slot_conflict(&pair[0]));
+        }
     }
     Ok(())
 }
@@ -172,6 +187,7 @@ pub fn set_homework_text(items: &mut Vec<Lesson>, index: usize, value: &str) -> 
     }
 
     lesson.homework = value.to_string();
+    validate_lesson(lesson)?;
 
     save_lessons(&updated)?;
     *items = updated;
@@ -187,4 +203,22 @@ pub fn delete_homework(items: &mut Vec<Lesson>, index: usize) -> Result<(), Stri
     save_lessons(&updated)?;
     *items = updated;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sorted_validation_allows_adjacent_lessons_and_rejects_overlap() {
+        let first = parse_lesson("Математика", "06.11.2026", "08:00", "08:40", "23").unwrap();
+        let adjacent = parse_lesson("Физика", "06.11.2026", "08:40", "09:20", "29").unwrap();
+        let next_day = parse_lesson("Химия", "07.11.2026", "08:10", "08:50", "30").unwrap();
+        assert!(validate_sorted_lessons(&[first.clone(), adjacent.clone(), next_day]).is_ok());
+        let overlapping = Lesson {
+            time: NaiveTime::from_hms_opt(8, 39, 0).unwrap(),
+            ..adjacent
+        };
+        assert!(validate_sorted_lessons(&[first, overlapping]).is_err());
+    }
 }

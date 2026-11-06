@@ -647,6 +647,7 @@ dependencies = [
  "gdk-pixbuf",
  "gtk4",
  "libadwaita",
+ "libc",
  "serde",
  "serde_json",
 ]

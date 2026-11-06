@@ -11,6 +11,10 @@ Unicode true
 !ifndef OUTPUT
 !error "Specify OUTPUT"
 !endif
+!ifndef INVENTORY
+!error "Specify INVENTORY"
+!endif
+!include "${INVENTORY}"
 Name "Школьный день"
 OutFile "${OUTPUT}"
 InstallDir "$LOCALAPPDATA\Programs\SchoolDay"
@@ -52,6 +56,16 @@ stop_install:
 not_running:
 !macroend
 
+!macro CHECK_DIRECTORY PATH
+  System::Call 'kernel32::GetFileAttributesW(w "${PATH}") i .r0'
+  ${If} $0 != -1
+    IntOp $0 $0 & 0x400
+    ${If} $0 != 0
+      Goto unsafe_directory
+    ${EndIf}
+  ${EndIf}
+!macroend
+
 Function .onInit
   !insertmacro CHECK_RUNNING
   ${IfNot} ${AtLeastWin10}
@@ -70,9 +84,22 @@ FunctionEnd
 
 Section "Приложение"
   SetShellVarContext current
+  !insertmacro CHECK_DIRECTORY "$INSTDIR"
+  !insertmacro CHECK_PAYLOAD_DIRS
+  ReadRegStr $1 HKCU "Software\SchoolDay" "InstallDir"
+  ${If} $1 == "$INSTDIR"
+  ${AndIf} ${FileExists} "$INSTDIR\bin\school-day.exe"
+    Goto write_payload
+  ${EndIf}
+  IfFileExists "$INSTDIR\Uninstall.exe" occupied_install_dir 0
+  !insertmacro CHECK_PAYLOAD_COLLISIONS
+write_payload:
+  ClearErrors
   SetOutPath "$INSTDIR"
   File /r "${PAYLOAD}/*"
+  IfErrors installation_failed
   WriteUninstaller "$INSTDIR\Uninstall.exe"
+  IfErrors installation_failed
   CreateDirectory "$SMPROGRAMS\Школьный день"
   CreateShortcut "$SMPROGRAMS\Школьный день\Школьный день.lnk" "$INSTDIR\bin\school-day.exe"
   CreateShortcut "$DESKTOP\Школьный день.lnk" "$INSTDIR\bin\school-day.exe"
@@ -86,20 +113,47 @@ Section "Приложение"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SchoolDay" "QuietUninstallString" '"$INSTDIR\Uninstall.exe" /S'
   WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SchoolDay" "NoModify" 1
   WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SchoolDay" "NoRepair" 1
+  Goto installation_finished
+occupied_install_dir:
+  IfSilent +2
+  MessageBox MB_ICONSTOP "В этой папке уже есть файлы с такими именами. Выберите другую папку."
+  Goto installation_failed
+unsafe_directory:
+  IfSilent +2
+  MessageBox MB_ICONSTOP "Папка установки содержит перенаправление. Выберите обычную папку."
+installation_failed:
+  SetErrorLevel 2
+  Abort
+installation_finished:
 SectionEnd
 
 Section "Uninstall"
   SetShellVarContext current
-  RMDir /r "$INSTDIR\bin"
-  RMDir /r "$INSTDIR\lib"
-  RMDir /r "$INSTDIR\share"
-  RMDir /r "$INSTDIR\etc"
-  Delete "$INSTDIR\NOTICE"
+  !insertmacro CHECK_DIRECTORY "$INSTDIR"
+  !insertmacro CHECK_PAYLOAD_DIRS
+  ClearErrors
+  !insertmacro DELETE_PAYLOAD_FILES
+  IfErrors uninstall_failed
+  !insertmacro REMOVE_PAYLOAD_DIRS
   Delete "$INSTDIR\Uninstall.exe"
   RMDir "$INSTDIR"
   Delete "$DESKTOP\Школьный день.lnk"
-  RMDir /r "$SMPROGRAMS\Школьный день"
+  Delete "$SMPROGRAMS\Школьный день\Школьный день.lnk"
+  RMDir "$SMPROGRAMS\Школьный день"
   DeleteRegKey HKCU "Software\SchoolDay"
   DeleteRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SchoolDay"
+  ClearErrors
+  Goto uninstall_finished
+unsafe_directory:
+  IfSilent +2
+  MessageBox MB_ICONSTOP "Папка установки содержит перенаправление. Удаление остановлено."
+  Goto uninstall_abort
+uninstall_failed:
+  IfSilent +2
+  MessageBox MB_ICONSTOP "Не удалось удалить некоторые файлы. Закройте приложение и повторите удаление."
+uninstall_abort:
+  SetErrorLevel 2
+  Abort
+uninstall_finished:
   ; Расписание и домашние задания находятся в пользовательской папке, её не удаляем.
 SectionEnd

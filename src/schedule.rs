@@ -229,13 +229,15 @@ struct TimePicker {
     widget: gtk::Box,
     hour: gtk::SpinButton,
     minute: gtk::SpinButton,
+    invalid_hour: Rc<Cell<bool>>,
+    invalid_minute: Rc<Cell<bool>>,
 }
 
 impl TimePicker {
     fn new(value: NaiveTime, label: &str) -> Self {
         let widget = gtk::Box::new(gtk::Orientation::Horizontal, 6);
-        let hour = time_spin(23.0, 1.0, &format!("Часы: {label}"));
-        let minute = time_spin(59.0, 5.0, &format!("Минуты: {label}"));
+        let (hour, invalid_hour) = time_spin(23, 1.0, &format!("Часы: {label}"));
+        let (minute, invalid_minute) = time_spin(59, 5.0, &format!("Минуты: {label}"));
         widget.append(&hour);
         widget.append(&text(":", "muted"));
         widget.append(&minute);
@@ -243,6 +245,8 @@ impl TimePicker {
             widget,
             hour,
             minute,
+            invalid_hour,
+            invalid_minute,
         };
         picker.set_time(value);
         picker
@@ -260,6 +264,8 @@ impl TimePicker {
     fn set_time(&self, time: NaiveTime) {
         self.hour.set_value(time.hour() as f64);
         self.minute.set_value(time.minute() as f64);
+        self.hour.set_text(&format!("{:02}", time.hour()));
+        self.minute.set_text(&format!("{:02}", time.minute()));
     }
 
     fn update(&self) {
@@ -271,20 +277,37 @@ impl TimePicker {
         self.hour.text().parse::<i32>().ok() != Some(self.hour.value_as_int())
             || self.minute.text().parse::<i32>().ok() != Some(self.minute.value_as_int())
     }
+
+    fn has_invalid_input(&self) -> bool {
+        self.invalid_hour.get() || self.invalid_minute.get()
+    }
 }
 
-fn time_spin(maximum: f64, step: f64, label: &str) -> gtk::SpinButton {
-    let spin = gtk::SpinButton::with_range(0.0, maximum, step);
+fn time_spin(maximum: u32, step: f64, label: &str) -> (gtk::SpinButton, Rc<Cell<bool>>) {
+    let spin = gtk::SpinButton::with_range(0.0, maximum as f64, step);
     spin.set_numeric(true);
     spin.set_wrap(true);
     spin.set_width_chars(2);
     spin.set_tooltip_text(Some(label));
     spin.set_update_policy(gtk::SpinButtonUpdatePolicy::IfValid);
-    spin.connect_output(|spin| {
-        spin.set_text(&format!("{:02}", spin.value_as_int()));
+    let invalid = Rc::new(Cell::new(false));
+    let parse = move |spin: &gtk::SpinButton| {
+        spin.text()
+            .parse::<u32>()
+            .ok()
+            .filter(|value| *value <= maximum)
+    };
+    let invalid_for_input = Rc::clone(&invalid);
+    spin.connect_changed(move |spin| invalid_for_input.set(parse(spin).is_none()));
+    spin.connect_input(move |spin| Some(parse(spin).map(f64::from).ok_or(())));
+    let invalid_for_output = Rc::clone(&invalid);
+    spin.connect_output(move |spin| {
+        if !invalid_for_output.get() {
+            spin.set_text(&format!("{:02}", spin.value_as_int()));
+        }
         gtk::glib::Propagation::Stop
     });
-    spin
+    (spin, invalid)
 }
 
 fn suggested_bell(items: &[Lesson], date: NaiveDate, bells: &[Bell]) -> Option<usize> {
@@ -304,19 +327,49 @@ fn suggested_bell(items: &[Lesson], date: NaiveDate, bells: &[Bell]) -> Option<u
         .or_else(|| bells.iter().position(free))
 }
 
-fn suggested_time(items: &[Lesson], date: NaiveDate, first: NaiveTime) -> Option<NaiveTime> {
-    match items
-        .iter()
-        .filter(|lesson| lesson.date == date)
-        .map(|lesson| lesson.end)
-        .max()
-    {
-        Some(end) => {
-            let (next, overflow) = end.overflowing_add_signed(chrono::Duration::minutes(10));
-            (overflow == 0).then_some(next)
-        }
-        None => Some(first),
+fn suggested_time(
+    items: &[Lesson],
+    date: NaiveDate,
+    bells: &[Bell],
+    minutes: i64,
+) -> (Option<usize>, NaiveTime, NaiveTime) {
+    if let Some(index) = suggested_bell(items, date, bells) {
+        return (Some(index), bells[index].start, bells[index].end);
     }
+    let day = || items.iter().filter(|lesson| lesson.date == date);
+    let duration = chrono::Duration::minutes(minutes);
+    let end_for = |start: NaiveTime| {
+        let (end, overflow) = start.overflowing_add_signed(duration);
+        (overflow == 0).then_some(end)
+    };
+    if let Some(last_end) = day().map(|lesson| lesson.end).max() {
+        let (start, overflow) = last_end.overflowing_add_signed(chrono::Duration::minutes(10));
+        if overflow == 0
+            && let Some(end) = end_for(start)
+        {
+            return (None, start, end);
+        }
+    }
+    let mut start = bells[0].start;
+    for lesson in day() {
+        if let Some(end) = end_for(start)
+            && end <= lesson.time
+        {
+            return (None, start, end);
+        }
+        start = start.max(lesson.end);
+    }
+    if let Some(end) = end_for(start) {
+        return (None, start, end);
+    }
+    let midnight = NaiveTime::MIN;
+    if let Some(first) = day().next()
+        && let Some(end) = end_for(midnight)
+        && end <= first.time
+    {
+        return (None, midnight, end);
+    }
+    (None, bells[0].start, bells[0].end)
 }
 
 fn on_add_lesson(
@@ -332,13 +385,8 @@ fn on_add_lesson(
     else {
         return;
     };
-    let config = match crate::settings::load_settings() {
-        Ok(settings) => settings,
-        Err(error) => {
-            notify(status, &format!("Не удалось загрузить настройки: {error}"));
-            return;
-        }
-    };
+    let config = crate::settings::load_settings().unwrap_or_default();
+    let lesson_minutes = config.bells.lesson_minutes as i64;
     let bells = match config.bells.slots() {
         Ok(bells) => bells,
         Err(error) => {
@@ -350,29 +398,16 @@ fn on_add_lesson(
     let date = existing
         .as_ref()
         .map_or_else(|| selected_date(calendar), |lesson| lesson.date);
-    let selected_bell = match &existing {
-        Some(lesson) => bells
-            .iter()
-            .position(|bell| bell.start == lesson.time && bell.end == lesson.end),
-        None => suggested_bell(&lessons.borrow(), date, &bells),
-    };
-    let (start, finish) = if let Some(lesson) = &existing {
-        (lesson.time, lesson.end)
-    } else if let Some(index) = selected_bell {
-        (bells[index].start, bells[index].end)
+    let (selected_bell, start, finish) = if let Some(lesson) = &existing {
+        (
+            bells
+                .iter()
+                .position(|bell| bell.start == lesson.time && bell.end == lesson.end),
+            lesson.time,
+            lesson.end,
+        )
     } else {
-        let Some(start) = suggested_time(&lessons.borrow(), date, config.bells.first_start) else {
-            notify(status, "В этом дне не осталось времени для нового урока");
-            return;
-        };
-        let (end, overflow) = start.overflowing_add_signed(chrono::Duration::minutes(
-            config.bells.lesson_minutes as i64,
-        ));
-        if overflow != 0 {
-            notify(status, "Урок должен закончиться до полуночи");
-            return;
-        }
-        (start, end)
+        suggested_time(&lessons.borrow(), date, &bells, lesson_minutes)
     };
     let root = column(0);
     let header = adw::HeaderBar::new();
@@ -381,9 +416,11 @@ fn on_add_lesson(
     } else {
         "Добавить урок"
     };
-    header.set_title_widget(Some(&text(heading, "section")));
+    let heading_label = text(heading, "section");
+    heading_label.set_wrap(false);
+    header.set_title_widget(Some(&heading_label));
     root.append(&header);
-    let form = column(18);
+    let form = column(12);
     margins(&form, 24);
     let title = field(&form, "Предмет", "Например, алгебра");
     let suggestions = gtk::ListBox::new();
@@ -424,28 +461,32 @@ fn on_add_lesson(
     }
     form.append(&times);
     let duration = Rc::new(Cell::new(
-        existing
-            .as_ref()
-            .map_or(config.bells.lesson_minutes as i64, |lesson| {
-                (lesson.end - lesson.time).num_minutes()
-            }),
+        existing.as_ref().map_or(lesson_minutes, |lesson| {
+            (lesson.end - lesson.time).num_minutes()
+        }),
     ));
     let syncing = Rc::new(Cell::new(false));
+    let automatic_time = Rc::new(Cell::new(index.is_none()));
     {
-        let (start, end, duration, syncing, choices) = (
+        let (start, end, duration, syncing, choices, automatic) = (
             start_picker.clone(),
             end_picker.clone(),
             Rc::clone(&duration),
             Rc::clone(&syncing),
             bells.clone(),
+            Rc::clone(&automatic_time),
         );
         number.connect_selected_notify(move |number| {
+            if syncing.get() {
+                return;
+            }
+            automatic.set(false);
             let Some(index) = number.selected().checked_sub(1) else {
                 return;
             };
             if let Some(bell) = choices.get(index as usize) {
                 syncing.set(true);
-                duration.set(config.bells.lesson_minutes as i64);
+                duration.set(lesson_minutes);
                 start.set_time(bell.start);
                 end.set_time(bell.end);
                 syncing.set(false);
@@ -454,18 +495,20 @@ fn on_add_lesson(
     }
     // Выбранный звонок подставляет оба времени. Ручная правка становится своим временем.
     for spin in [&start_picker.hour, &start_picker.minute] {
-        let (hour, minute, end, duration, syncing, number) = (
+        let (hour, minute, end, duration, syncing, number, automatic) = (
             start_picker.hour.downgrade(),
             start_picker.minute.downgrade(),
             end_picker.clone(),
             Rc::clone(&duration),
             Rc::clone(&syncing),
             number.downgrade(),
+            Rc::clone(&automatic_time),
         );
         spin.connect_value_changed(move |_| {
             if syncing.get() {
                 return;
             }
+            automatic.set(false);
             if let (Some(hour), Some(minute)) = (hour.upgrade(), minute.upgrade()) {
                 let start = NaiveTime::from_hms_opt(
                     hour.value_as_int() as u32,
@@ -490,10 +533,12 @@ fn on_add_lesson(
         let number = number.downgrade();
         let duration = Rc::clone(&duration);
         let syncing = Rc::clone(&syncing);
+        let automatic = Rc::clone(&automatic_time);
         spin.connect_value_changed(move |_| {
             if syncing.get() {
                 return;
             }
+            automatic.set(false);
             if let (Some(sh), Some(sm), Some(eh), Some(em)) = (
                 start_hour.upgrade(),
                 start_minute.upgrade(),
@@ -551,9 +596,36 @@ fn on_add_lesson(
         let feedback = feedback.clone();
         spin.connect_value_changed(move |_| feedback.set_visible(false));
     }
-    let feedback_for_date = feedback.clone();
-    date_picker.connect_day_selected(move |_| feedback_for_date.set_visible(false));
-    form.append(&feedback);
+    {
+        let (feedback, items, number, start, end, duration, syncing, bells) = (
+            feedback.clone(),
+            Rc::clone(lessons),
+            number.clone(),
+            start_picker.clone(),
+            end_picker.clone(),
+            Rc::clone(&duration),
+            Rc::clone(&syncing),
+            bells.clone(),
+        );
+        date_picker.connect_day_selected(move |calendar| {
+            feedback.set_visible(false);
+            if !automatic_time.get() || start.has_pending_input() || end.has_pending_input() {
+                return;
+            }
+            let (slot, from, to) = suggested_time(
+                &items.borrow(),
+                selected_date(calendar),
+                &bells,
+                lesson_minutes,
+            );
+            syncing.set(true);
+            number.set_selected(slot.map_or(0, |index| index as u32 + 1));
+            start.set_time(from);
+            end.set_time(to);
+            duration.set(lesson_minutes);
+            syncing.set(false);
+        });
+    }
     let actions = gtk::Box::new(gtk::Orientation::Horizontal, 8);
     actions.set_halign(gtk::Align::End);
     let cancel = gtk::Button::with_label("Отмена");
@@ -573,6 +645,12 @@ fn on_add_lesson(
     scroll.set_vexpand(true);
     scroll.set_child(Some(&form));
     root.append(&scroll);
+    feedback.set_margin_start(24);
+    feedback.set_margin_end(24);
+    feedback.set_margin_top(8);
+    feedback.set_lines(3);
+    feedback.set_ellipsize(gtk::pango::EllipsizeMode::End);
+    root.append(&feedback);
     // Действия остаются видимыми даже в небольшом окне с прокруткой.
     root.append(&actions);
     let window = adw::Window::builder()
@@ -611,6 +689,13 @@ fn on_add_lesson(
     );
     let title_for_focus = title.clone();
     save.connect_clicked(move |_| {
+        if start_picker.has_invalid_input() || end_picker.has_invalid_input() {
+            notify(
+                &feedback,
+                "Проверьте время. Часы от 0 до 23, минуты от 0 до 59.",
+            );
+            return;
+        }
         let pending_start = start_picker.has_pending_input();
         let pending_end = end_picker.has_pending_input();
         syncing.set(true);

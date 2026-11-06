@@ -1,7 +1,9 @@
 use serde::{Serialize, de::DeserializeOwned};
 use std::fs::{File, OpenOptions, TryLockError};
-use std::io::Write;
+use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
+
+const MAX_JSON_BYTES: u64 = 32 * 1024 * 1024;
 
 pub fn data_dir() -> PathBuf {
     gtk::glib::user_data_dir().join("school-day")
@@ -15,7 +17,7 @@ pub fn lock_data() -> Result<File, String> {
 
 fn lock_directory(directory: &Path) -> Result<File, String> {
     std::fs::create_dir_all(directory).map_err(|error| error.to_string())?;
-    let mut options = OpenOptions::new();
+    let mut options = local_file_options();
     options.read(true).write(true).create(true).truncate(false);
     #[cfg(unix)]
     {
@@ -25,6 +27,8 @@ fn lock_directory(directory: &Path) -> Result<File, String> {
     let file = options
         .open(directory.join(".school-day.lock"))
         .map_err(|error| format!("Не удалось открыть каталог данных: {error}"))?;
+    require_regular_file(&file.metadata().map_err(|error| error.to_string())?)
+        .map_err(|error| error.to_string())?;
     match file.try_lock() {
         Ok(()) => Ok(file),
         Err(TryLockError::WouldBlock) => Err(
@@ -39,13 +43,13 @@ fn lock_directory(directory: &Path) -> Result<File, String> {
 
 pub fn load_json<T>(
     name: &str,
-    validate: impl Fn(&T) -> Result<(), String>,
+    validate: impl Fn(&mut T) -> Result<(), String>,
 ) -> Result<Option<T>, String>
 where
     T: DeserializeOwned + Serialize,
 {
     let target = data_dir().join(name);
-    match std::fs::read_to_string(&target) {
+    match read_json_file(&target) {
         Ok(json) => return decode(&json, &validate).map(Some),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
         Err(error) => return Err(format!("{}: {error}", target.display())),
@@ -56,20 +60,13 @@ where
     if std::env::var_os("FLATPAK_ID").is_some() {
         return Ok(None);
     }
-    let mut directories = Vec::new();
-    if let Ok(directory) = std::env::current_dir() {
-        directories.push(directory.join("data"));
-    }
     if let Ok(executable) = std::env::current_exe()
         && let Some(directory) = executable.parent()
     {
-        directories.push(directory.join("data"));
-    }
-    for directory in directories {
-        let source = directory.join(name);
-        let json = match std::fs::read_to_string(&source) {
+        let source = directory.join("data").join(name);
+        let json = match read_json_file(&source) {
             Ok(json) => json,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
             Err(error) => return Err(format!("{}: {error}", source.display())),
         };
         let value = decode(&json, &validate)?;
@@ -79,12 +76,72 @@ where
     Ok(None)
 }
 
+fn local_file_options() -> OpenOptions {
+    let mut options = OpenOptions::new();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
+        options.custom_flags(FILE_FLAG_OPEN_REPARSE_POINT);
+    }
+    options
+}
+
+fn require_regular_file(metadata: &std::fs::Metadata) -> io::Result<()> {
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
+        if metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "Ожидался обычный файл",
+            ));
+        }
+    }
+    if !metadata.is_file() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Ожидался обычный файл",
+        ));
+    }
+    Ok(())
+}
+
+fn read_json_file(path: &Path) -> io::Result<String> {
+    require_regular_file(&std::fs::symlink_metadata(path)?)?;
+    let file = local_file_options().read(true).open(path)?;
+    let metadata = file.metadata()?;
+    require_regular_file(&metadata)?;
+    if metadata.len() > MAX_JSON_BYTES {
+        return Err(json_too_large());
+    }
+    let mut json = String::new();
+    file.take(MAX_JSON_BYTES + 1).read_to_string(&mut json)?;
+    if json.len() as u64 > MAX_JSON_BYTES {
+        return Err(json_too_large());
+    }
+    Ok(json)
+}
+
+fn json_too_large() -> io::Error {
+    io::Error::new(
+        io::ErrorKind::InvalidData,
+        "Размер файла данных превышает 32 МиБ",
+    )
+}
+
 fn decode<T: DeserializeOwned>(
     json: &str,
-    validate: &impl Fn(&T) -> Result<(), String>,
+    validate: &impl Fn(&mut T) -> Result<(), String>,
 ) -> Result<T, String> {
-    let value = serde_json::from_str(json).map_err(|error| error.to_string())?;
-    validate(&value)?;
+    let mut value = serde_json::from_str(json).map_err(|error| error.to_string())?;
+    validate(&mut value)?;
     Ok(value)
 }
 
@@ -93,7 +150,37 @@ pub fn save_json<T: Serialize + ?Sized>(name: &str, value: &T) -> Result<(), Str
     write_json(&data_dir(), name, &json).map_err(|error| error.to_string())
 }
 
+pub fn reset_json<T: Serialize>(name: &str, value: &T) -> Result<Option<PathBuf>, String> {
+    let directory = data_dir();
+    let target = directory.join(name);
+    let backup = match std::fs::symlink_metadata(&target) {
+        Ok(metadata) if !metadata.is_dir() => {
+            let backup = directory.join(format!("{name}.{}.bak", gtk::glib::uuid_string_random()));
+            std::fs::rename(&target, &backup).map_err(|error| error.to_string())?;
+            Some(backup)
+        }
+        Ok(_) => return Err(format!("{} — каталог", target.display())),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => None,
+        Err(error) => return Err(error.to_string()),
+    };
+    if let Err(error) = save_json(name, value) {
+        if let Some(backup) = &backup
+            && let Err(restore) = std::fs::rename(backup, &target)
+        {
+            return Err(format!(
+                "{error}. Исходный файл сохранён в {}. Ошибка восстановления: {restore}",
+                backup.display()
+            ));
+        }
+        return Err(error);
+    }
+    Ok(backup)
+}
+
 fn write_json(directory: &Path, name: &str, json: &[u8]) -> std::io::Result<()> {
+    if json.len() as u64 > MAX_JSON_BYTES {
+        return Err(json_too_large());
+    }
     std::fs::create_dir_all(directory)?;
     let target = directory.join(name);
     let temporary = directory.join(format!(".{name}.{}.tmp", gtk::glib::uuid_string_random()));
@@ -173,6 +260,37 @@ mod tests {
         assert!(write_json(&sandbox.0, "lessons.json", b"[]").is_err());
         assert!(sandbox.0.join("lessons.json").is_dir());
         assert_eq!(std::fs::read_dir(&sandbox.0).unwrap().count(), 1);
+    }
+
+    #[test]
+    fn read_rejects_data_above_limit_before_loading_it() {
+        let sandbox = Sandbox::new();
+        let path = sandbox.0.join("lessons.json");
+        File::create(&path)
+            .unwrap()
+            .set_len(MAX_JSON_BYTES + 1)
+            .unwrap();
+        assert_eq!(
+            read_json_file(&path).unwrap_err().kind(),
+            io::ErrorKind::InvalidData
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn reading_data_and_locking_refuse_symbolic_links() {
+        let sandbox = Sandbox::new();
+        let original = sandbox.0.join("original");
+        std::fs::write(&original, "[]").unwrap();
+        let data = sandbox.0.join("lessons.json");
+        std::os::unix::fs::symlink(&original, &data).unwrap();
+        std::os::unix::fs::symlink(&original, sandbox.0.join(".school-day.lock")).unwrap();
+        assert_eq!(
+            read_json_file(&data).unwrap_err().kind(),
+            io::ErrorKind::InvalidData
+        );
+        assert!(lock_directory(&sandbox.0).is_err());
+        assert_eq!(std::fs::read_to_string(original).unwrap(), "[]");
     }
 
     #[cfg(unix)]
