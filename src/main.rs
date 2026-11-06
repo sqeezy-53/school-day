@@ -8,6 +8,7 @@ mod schedule;
 mod settings;
 mod storage;
 mod tutorial;
+mod undo;
 #[cfg(target_os = "windows")]
 mod windows;
 
@@ -38,6 +39,7 @@ entry:focus-within { border-color: alpha(@window_fg_color, 0.55); }
 .form-error { color: @error_color; }
 .homework-editor { border: 1px solid alpha(@window_fg_color, 0.15); border-radius: 6px; }
 .homework-editor:focus-within { border-color: alpha(@window_fg_color, 0.55); }
+.undo-bar { padding: 8px 16px; border-top: 1px solid alpha(@window_fg_color, 0.15); background: @headerbar_bg_color; }
 .status { opacity: 0.80; padding-top: 12px; border-top: 1px solid alpha(@window_fg_color, 0.10); }
 .settings-section { padding-top: 20px; border-top: 1px solid alpha(@window_fg_color, 0.10); }
 .settings-title { font-size: 16px; font-weight: 600; }
@@ -143,12 +145,20 @@ fn build_window(app: &adw::Application) {
     pages.set_vhomogeneous(false);
     let status = text("", "status");
     status.set_visible(false);
+    let undo = undo::UndoBar::new(&status);
+    let undo_handle = undo.handle();
     // Обе вкладки получают ссылки на один список уроков и домашних заданий.
     let lessons_loaded = match lessons::load_lessons() {
         Ok(loaded) => {
             let items = lessons::Lessons::new(loaded);
-            pages.add_named(&schedule_page(&status, items.clone()), Some("schedule"));
-            pages.add_named(&homework::homework_page(&status, items), Some("homework"));
+            pages.add_named(
+                &schedule_page(&status, items.clone(), Some(&undo_handle)),
+                Some("schedule"),
+            );
+            pages.add_named(
+                &homework::homework_page(&status, items, Some(&undo_handle)),
+                Some("homework"),
+            );
             true
         }
         Err(error) => {
@@ -235,6 +245,7 @@ fn build_window(app: &adw::Application) {
         }
     });
     root.append(&scroll);
+    root.append(undo.widget());
     let overlay = gtk::Overlay::new();
     overlay.set_child(Some(&root));
     compact.add_setter(
@@ -256,6 +267,7 @@ fn build_window(app: &adw::Application) {
     keys.set_propagation_phase(gtk::PropagationPhase::Capture);
     let shortcut_tabs = tabs.each_ref().map(|tab| tab.downgrade());
     let weak_root = root.downgrade();
+    let weak_window = window.downgrade();
     keys.connect_key_pressed(move |_, key, _, modifiers| {
         use gtk::gdk::{Key, ModifierType};
         if !modifiers.contains(ModifierType::CONTROL_MASK)
@@ -265,6 +277,17 @@ fn build_window(app: &adw::Application) {
             || !weak_root.upgrade().is_some_and(|root| root.can_focus())
         {
             return gtk::glib::Propagation::Proceed;
+        }
+        if matches!(key, Key::z | Key::Z | Key::Cyrillic_ya | Key::Cyrillic_YA) {
+            let editing = weak_window
+                .upgrade()
+                .and_then(|window| gtk::prelude::GtkWindowExt::focus(&window))
+                .is_some_and(|focus| focus.is::<gtk::Editable>() || focus.is::<gtk::TextView>());
+            return if !editing && undo.restore() {
+                gtk::glib::Propagation::Stop
+            } else {
+                gtk::glib::Propagation::Proceed
+            };
         }
         let index = match key {
             Key::_1 | Key::KP_1 => 0,

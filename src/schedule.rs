@@ -5,18 +5,19 @@ use std::rc::Rc;
 
 use crate::bells::Bell;
 use crate::forms::{self, HOMEWORK_LIMIT, ROOM_LIMIT, SUBJECT_LIMIT};
-use crate::lessons::{Lesson, Lessons, RecordId, parse_lesson};
+use crate::lessons::{HomeworkId, Lesson, Lessons, RecordId, parse_lesson};
 use crate::tutorial::Anchor;
+use crate::undo::UndoHandle;
 
 use crate::{column, empty_state, field, margins, notify, page, primary, text};
 
-pub fn schedule_page(status: &gtk::Label, lessons: Lessons) -> gtk::Box {
+pub fn schedule_page(status: &gtk::Label, lessons: Lessons, undo: Option<&UndoHandle>) -> gtk::Box {
     let page = page("Расписание");
     let calendar = gtk::Calendar::new();
     let date = date_button(&calendar);
     Anchor::Date.mark(&date);
     let list = column(0);
-    render_lessons(&list, &lessons, &calendar, status, None);
+    render_lessons(&list, &lessons, &calendar, status, None, undo);
 
     let toolbar = adw::WrapBox::new();
     toolbar.set_child_spacing(8);
@@ -61,14 +62,52 @@ pub fn schedule_page(status: &gtk::Label, lessons: Lessons) -> gtk::Box {
         status.clone(),
         list.downgrade(),
     );
+    let undo_for_add = undo.cloned();
     add.connect_clicked(move |_| {
         if let Some(list) = weak_list.upgrade() {
-            on_add_lesson(&status_for_add, &items, &list, &calendar_for_add, None);
+            on_add_lesson(
+                &status_for_add,
+                &items,
+                &list,
+                &calendar_for_add,
+                None,
+                undo_for_add.as_ref(),
+            );
         }
     });
     toolbar.append(&add);
     page.append(&toolbar);
     page.append(&list);
+
+    if let Some(undo) = undo.cloned() {
+        let (list, calendar, status) = (list.downgrade(), calendar.downgrade(), status.downgrade());
+        lessons.connect_restored(move |lessons, removed| {
+            let (Some(list), Some(calendar), Some(status)) =
+                (list.upgrade(), calendar.upgrade(), status.upgrade())
+            else {
+                return;
+            };
+            if !list.is_mapped() {
+                return;
+            }
+            let slot = removed.lesson_slot().or_else(|| {
+                if let Some(HomeworkId::Linked(id)) = removed.homework_id() {
+                    lessons
+                        .borrow()
+                        .iter()
+                        .find(|lesson| lesson.id == id)
+                        .map(|lesson| (lesson.date, lesson.time))
+                } else {
+                    None
+                }
+            });
+            if let Some((date, time)) = slot
+                && date == selected_date(&calendar)
+            {
+                render_lessons(&list, lessons, &calendar, &status, Some(time), Some(&undo));
+            }
+        });
+    }
 
     let weak_list = list.downgrade();
     let status = status.clone();
@@ -77,6 +116,7 @@ pub fn schedule_page(status: &gtk::Label, lessons: Lessons) -> gtk::Box {
     let status_for_map = status.clone();
     let list_for_map = list.downgrade();
 
+    let undo_for_map = undo.cloned();
     page.connect_map(move |_| {
         if let Some(list) = list_for_map.upgrade() {
             render_lessons(
@@ -85,13 +125,15 @@ pub fn schedule_page(status: &gtk::Label, lessons: Lessons) -> gtk::Box {
                 &calendar_for_map,
                 &status_for_map,
                 None,
+                undo_for_map.as_ref(),
             );
         }
     });
 
+    let undo = undo.cloned();
     calendar.connect_day_selected(move |calendar| {
         if let Some(list) = weak_list.upgrade() {
-            render_lessons(&list, &lessons, calendar, &status, None);
+            render_lessons(&list, &lessons, calendar, &status, None, undo.as_ref());
         }
     });
     page
@@ -197,6 +239,7 @@ fn render_lessons(
     calendar: &gtk::Calendar,
     status: &gtk::Label,
     focus_time: Option<NaiveTime>,
+    undo: Option<&UndoHandle>,
 ) {
     while let Some(child) = list.first_child() {
         list.remove(&child);
@@ -266,16 +309,18 @@ fn render_lessons(
                 status.clone(),
                 list.downgrade(),
             );
+            let undo = undo.cloned();
             button.connect_clicked(move |_| {
                 let Some(list) = weak_list.upgrade() else {
                     return;
                 };
                 if editing {
-                    on_add_lesson(&status, &items, &list, &calendar, Some(id));
+                    on_add_lesson(&status, &items, &list, &calendar, Some(id), undo.as_ref());
                 } else {
                     let items = items.clone();
                     let calendar = calendar.clone();
                     let feedback = status.clone();
+                    let undo = undo.clone();
                     crate::confirm_delete(
                         &status,
                         "Удалить урок?",
@@ -283,7 +328,7 @@ fn render_lessons(
                         move || {
                             let result = items.delete_lesson(id);
                             match result {
-                                Ok(()) => {
+                                Ok(removed) => {
                                     let focus_time = {
                                         let date = selected_date(&calendar);
                                         let items = items.borrow();
@@ -300,13 +345,24 @@ fn render_lessons(
                                             })
                                             .map(|lesson| lesson.time)
                                     };
-                                    render_lessons(&list, &items, &calendar, &feedback, focus_time);
+                                    render_lessons(
+                                        &list,
+                                        &items,
+                                        &calendar,
+                                        &feedback,
+                                        focus_time,
+                                        undo.as_ref(),
+                                    );
                                     if focus_time.is_none()
                                         && let Some(page) = list.parent()
                                     {
                                         page.child_focus(gtk::DirectionType::TabForward);
                                     }
-                                    notify(&feedback, "Урок удалён");
+                                    if let Some(undo) = &undo {
+                                        undo.offer(&items, removed);
+                                    } else {
+                                        notify(&feedback, "Урок удалён");
+                                    }
                                 }
                                 Err(error) => {
                                     notify(&feedback, &format!("Не удалось удалить урок: {error}"))
@@ -478,6 +534,7 @@ fn on_add_lesson(
     list: &gtk::Box,
     calendar: &gtk::Calendar,
     id: Option<RecordId>,
+    undo: Option<&UndoHandle>,
 ) {
     let Some(parent) = status
         .root()
@@ -801,6 +858,7 @@ fn on_add_lesson(
         window.downgrade(),
     );
     let title_for_focus = title.clone();
+    let undo = undo.cloned();
     save.connect_clicked(move |_| {
         for error in [
             &title_error,
@@ -920,7 +978,7 @@ fn on_add_lesson(
                 select_date(&calendar, date);
                 if let Some(list) = weak_list.upgrade() {
                     let focus = id.map(|_| start_picker.time());
-                    render_lessons(&list, &items, &calendar, &status, focus);
+                    render_lessons(&list, &items, &calendar, &status, focus, undo.as_ref());
                 }
                 notify(
                     &status,

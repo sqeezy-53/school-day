@@ -44,6 +44,43 @@ enum SavedData {
     Current(SchoolData),
 }
 
+pub struct Removed(RemovedItem);
+
+enum RemovedItem {
+    Lesson(Lesson),
+    LinkedHomework {
+        lesson: RecordId,
+        body: String,
+        completed: bool,
+    },
+    PendingHomework {
+        index: usize,
+        task: PendingHomework,
+    },
+}
+
+impl Removed {
+    pub fn lesson_slot(&self) -> Option<(NaiveDate, NaiveTime)> {
+        match &self.0 {
+            RemovedItem::Lesson(lesson) => Some((lesson.date, lesson.time)),
+            _ => None,
+        }
+    }
+
+    pub fn homework_id(&self) -> Option<HomeworkId> {
+        match &self.0 {
+            RemovedItem::Lesson(lesson) if !lesson.homework.trim().is_empty() => {
+                Some(HomeworkId::Linked(lesson.id))
+            }
+            RemovedItem::LinkedHomework { lesson, .. } => Some(HomeworkId::Linked(*lesson)),
+            RemovedItem::PendingHomework { task, .. } => Some(HomeworkId::Pending(task.id)),
+            _ => None,
+        }
+    }
+}
+
+type RestoreCallback = Box<dyn Fn(&Lessons, &Removed)>;
+
 #[derive(Clone)]
 pub struct Lessons(Rc<LessonList>);
 
@@ -51,6 +88,7 @@ struct LessonList {
     data: RefCell<SchoolData>,
     next_id: Cell<RecordId>,
     practice_changed: Option<Box<dyn Fn()>>,
+    restored: RefCell<Vec<RestoreCallback>>,
 }
 
 impl Lessons {
@@ -66,6 +104,7 @@ impl Lessons {
             data: RefCell::new(data),
             next_id: Cell::new(next_id.next().unwrap()),
             practice_changed: None,
+            restored: RefCell::new(Vec::new()),
         }))
     }
 
@@ -74,6 +113,7 @@ impl Lessons {
             data: RefCell::new(SchoolData::default()),
             next_id: Cell::new(1),
             practice_changed: Some(Box::new(on_change)),
+            restored: RefCell::new(Vec::new()),
         }))
     }
 
@@ -322,15 +362,61 @@ impl Lessons {
         Ok(attached)
     }
 
-    pub fn delete_lesson(&self, id: RecordId) -> Result<(), String> {
+    pub fn delete_lesson(&self, id: RecordId) -> Result<Removed, String> {
         let mut data = self.0.data.borrow().clone();
         let index = data
             .lessons
             .iter()
             .position(|lesson| lesson.id == id)
             .ok_or("Урок уже удалён")?;
-        data.lessons.remove(index);
-        self.replace(data)
+        let removed = RemovedItem::Lesson(data.lessons.remove(index));
+        self.replace(data)?;
+        Ok(Removed(removed))
+    }
+
+    pub fn connect_restored(&self, callback: impl Fn(&Self, &Removed) + 'static) {
+        self.0.restored.borrow_mut().push(Box::new(callback));
+    }
+
+    pub fn restore(&self, removed: &Removed) -> Result<(), String> {
+        let mut data = self.0.data.borrow().clone();
+        match &removed.0 {
+            RemovedItem::Lesson(lesson) => {
+                if data.lessons.iter().any(|item| item.id == lesson.id) {
+                    return Err("Урок уже восстановлен".into());
+                }
+                check_slot(&data.lessons, lesson)?;
+                data.lessons.push(lesson.clone());
+                data.lessons
+                    .sort_by_key(|lesson| (lesson.date, lesson.time));
+            }
+            RemovedItem::LinkedHomework {
+                lesson,
+                body,
+                completed,
+            } => {
+                let lesson = data
+                    .lesson_mut(*lesson)
+                    .map_err(|_| "Урок удалён. Сначала верните урок")?;
+                if !lesson.homework.trim().is_empty() {
+                    return Err("У этого урока уже есть домашнее задание".into());
+                }
+                lesson.homework.clone_from(body);
+                lesson.homework_completed = *completed;
+            }
+            RemovedItem::PendingHomework { index, task } => {
+                if data.pending_homework.iter().any(|item| item.id == task.id) {
+                    return Err("Задание уже восстановлено".into());
+                }
+                data.pending_homework
+                    .insert((*index).min(data.pending_homework.len()), task.clone());
+            }
+        }
+        self.replace(data)?;
+        for callback in self.0.restored.borrow().iter() {
+            callback(self, removed);
+        }
+        Ok(())
     }
 
     pub fn homework(&self) -> Vec<Homework> {
@@ -467,20 +553,30 @@ impl Lessons {
         Ok(saved)
     }
 
-    pub fn delete_homework(&self, id: HomeworkId) -> Result<(), String> {
+    pub fn delete_homework(&self, id: HomeworkId) -> Result<Removed, String> {
         let mut data = self.0.data.borrow().clone();
-        match id {
+        let removed = match id {
             HomeworkId::Linked(id) => {
                 let lesson = data.lesson_mut(id)?;
-                lesson.homework.clear();
-                lesson.homework_completed = false;
+                if lesson.homework.trim().is_empty() {
+                    return Err("Задание уже удалено".into());
+                }
+                RemovedItem::LinkedHomework {
+                    lesson: id,
+                    body: std::mem::take(&mut lesson.homework),
+                    completed: std::mem::take(&mut lesson.homework_completed),
+                }
             }
             HomeworkId::Pending(id) => {
                 let index = data.pending_index(id)?;
-                data.pending_homework.remove(index);
+                RemovedItem::PendingHomework {
+                    index,
+                    task: data.pending_homework.remove(index),
+                }
             }
-        }
-        self.replace(data)
+        };
+        self.replace(data)?;
+        Ok(Removed(removed))
     }
 }
 
@@ -635,5 +731,73 @@ mod tests {
         assert!(tasks[0].completed);
         assert_eq!(tasks[1].body, "Новое ДЗ");
         assert!(tasks[1].completed);
+    }
+
+    #[test]
+    fn undo_lesson_keeps_completion_and_rejects_an_occupied_slot() {
+        let items = Lessons::practice(|| {});
+        let mut lesson = parse_lesson("Физика", "06.11.2026", "08:00", "08:40", "23").unwrap();
+        lesson.homework = "Выполнено".into();
+        lesson.homework_completed = true;
+        items.store_lesson(lesson.clone(), None).unwrap();
+        let id = items.borrow()[0].id;
+        let removed = items.delete_lesson(id).unwrap();
+        assert!(items.homework().is_empty());
+
+        let replacement = Lesson {
+            title: "География".into(),
+            homework: String::new(),
+            homework_completed: false,
+            ..lesson.clone()
+        };
+        items.store_lesson(replacement, None).unwrap();
+        assert!(items.restore(&removed).is_err());
+        assert_eq!(items.borrow()[0].title, "География");
+        let replacement_id = items.borrow()[0].id;
+        items.delete_lesson(replacement_id).unwrap();
+
+        items.restore(&removed).unwrap();
+        assert_eq!(items.borrow()[0].id, id);
+        assert_eq!(items.homework()[0].body, "Выполнено");
+        assert!(items.homework()[0].completed);
+        assert!(items.restore(&removed).is_err());
+    }
+
+    #[test]
+    fn undo_homework_uses_lesson_identity_and_keeps_standalone_state() {
+        let items = Lessons::practice(|| {});
+        let mut lesson = parse_lesson("Физика", "06.11.2026", "08:00", "08:40", "23").unwrap();
+        items.store_lesson(lesson.clone(), None).unwrap();
+        let id = items.borrow()[0].id;
+        items.set_homework_text(id, "Старое", true).unwrap();
+        items
+            .set_homework_completed(HomeworkId::Linked(id), true)
+            .unwrap();
+        let removed = items.delete_homework(HomeworkId::Linked(id)).unwrap();
+        items.set_homework_text(id, "Новое", true).unwrap();
+        assert!(items.restore(&removed).is_err());
+        assert_eq!(items.homework()[0].body, "Новое");
+
+        items.delete_homework(HomeworkId::Linked(id)).unwrap();
+        lesson.date = lesson.date.succ_opt().unwrap();
+        items.store_lesson(lesson, Some(id)).unwrap();
+        items.restore(&removed).unwrap();
+        assert_eq!(items.homework()[0].body, "Старое");
+        assert!(items.homework()[0].completed);
+
+        let id = items
+            .save_pending(None, "Музыка", None, "Послушать", None)
+            .unwrap();
+        items.set_homework_completed(id, true).unwrap();
+        let removed = items.delete_homework(id).unwrap();
+        items.restore(&removed).unwrap();
+        let pending = items
+            .homework()
+            .into_iter()
+            .find(|task| task.id == id)
+            .unwrap();
+        assert_eq!(pending.body, "Послушать");
+        assert_eq!(pending.date, None);
+        assert!(pending.completed);
     }
 }

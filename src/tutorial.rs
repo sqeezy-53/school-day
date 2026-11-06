@@ -559,8 +559,8 @@ impl Tour {
                 }
             });
         });
-        let schedule = crate::schedule::schedule_page(&status, items.clone());
-        let homework = crate::homework::homework_page(&status, items.clone());
+        let schedule = crate::schedule::schedule_page(&status, items.clone(), None);
+        let homework = crate::homework::homework_page(&status, items.clone(), None);
         pages.add_child(&schedule);
         pages.add_child(&homework);
         *self.practice.borrow_mut() = Some(Practice {

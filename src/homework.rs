@@ -5,9 +5,10 @@ use std::rc::Rc;
 use crate::forms::{self, HOMEWORK_LIMIT, SUBJECT_LIMIT, length_error};
 use crate::lessons::{Homework, HomeworkId, Lesson, Lessons, same_subject};
 use crate::tutorial::Anchor;
+use crate::undo::UndoHandle;
 use crate::{column, field, margins, notify, page, primary, text};
 
-pub fn homework_page(status: &gtk::Label, lessons: Lessons) -> gtk::Box {
+pub fn homework_page(status: &gtk::Label, lessons: Lessons, undo: Option<&UndoHandle>) -> gtk::Box {
     let page = page("Домашние задания");
     let add = primary("Добавить ДЗ");
     Anchor::AddHomework.mark(&add);
@@ -28,6 +29,7 @@ pub fn homework_page(status: &gtk::Label, lessons: Lessons) -> gtk::Box {
         open,
         done,
         completed,
+        undo: undo.cloned(),
     });
     let weak_list = Rc::downgrade(&list);
     add.connect_clicked(move |_| {
@@ -36,6 +38,16 @@ pub fn homework_page(status: &gtk::Label, lessons: Lessons) -> gtk::Box {
         }
     });
 
+    if undo.is_some() {
+        let weak_list = Rc::downgrade(&list);
+        list.lessons.connect_restored(move |_, removed| {
+            if let (Some(list), Some(id)) = (weak_list.upgrade(), removed.homework_id())
+                && list.open.is_mapped()
+            {
+                list.render(Some(RowFocus::Edit(id)));
+            }
+        });
+    }
     list.render(None);
     page.connect_map(move |_| list.render(None));
     page
@@ -55,6 +67,7 @@ struct HomeworkList {
     open: gtk::Box,
     done: gtk::Box,
     completed: gtk::Expander,
+    undo: Option<UndoHandle>,
 }
 
 impl HomeworkList {
@@ -159,9 +172,13 @@ impl HomeworkList {
                         previous = Some(task.id);
                     }
                     match list.lessons.delete_homework(id) {
-                        Ok(()) => {
+                        Ok(removed) => {
                             list.render(Some(previous.map_or(RowFocus::Add, RowFocus::Edit)));
-                            notify(&list.status, "Домашнее задание удалено");
+                            if let Some(undo) = &list.undo {
+                                undo.offer(&list.lessons, removed);
+                            } else {
+                                notify(&list.status, "Домашнее задание удалено");
+                            }
                         }
                         Err(error) => {
                             notify(&list.status, &format!("Не удалось удалить ДЗ: {error}"))
