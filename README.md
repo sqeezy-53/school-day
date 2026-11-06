@@ -17,19 +17,11 @@
 
 ## Установка
 
-**Windows x64:** [скачать установщик](https://github.com/sqeezy-53/school-day/releases/download/v0.2.0/school-day-0.2.0-windows-x64-setup.exe).
+**Windows x64:** [скачать установщик](https://github.com/sqeezy-53/school-day/releases/download/v0.3.0/school-day-0.3.0-windows-x64-setup.exe).
 
-**Linux x86_64:** установите [Flatpak](https://flathub.org/en/setup) и [скачайте пакет](https://github.com/sqeezy-53/school-day/releases/download/v0.2.0/school-day-0.2.0-x86_64.flatpak).
+**Linux x86_64:** установите [Flatpak](https://flathub.org/en/setup) и [скачайте пакет](https://github.com/sqeezy-53/school-day/releases/download/v0.3.0/school-day-0.3.0-x86_64.flatpak).
 
 ```sh
-flatpak install --user ./school-day-0.2.0-x86_64.flatpak
+flatpak install --user ./school-day-0.3.0-x86_64.flatpak
 flatpak run io.github.sqeezy_53.school-day
 ```
-
-## Данные старых версий
-
-Если данные лежат в папке `data` старого проекта, закройте приложение и скопируйте `lessons.json` и `settings.json` в каталог данных. Скопируйте только те файлы, которых там ещё нет.
-
-- Linux без Flatpak — `$XDG_DATA_HOME/school-day` (по умолчанию `~/.local/share/school-day`).
-- Flatpak — `~/.var/app/io.github.sqeezy_53.school-day/data/school-day`.
-- Windows — `%LOCALAPPDATA%\school-day`.

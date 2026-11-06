@@ -3,7 +3,7 @@ Unicode true
 !include "x64.nsh"
 !include "WinVer.nsh"
 !ifndef APP_VERSION
-!define APP_VERSION "0.2.0"
+!define APP_VERSION "0.3.0"
 !endif
 !ifndef PAYLOAD
 !error "Specify PAYLOAD"
