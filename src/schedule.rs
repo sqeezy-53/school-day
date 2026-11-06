@@ -4,6 +4,7 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use crate::bells::Bell;
+use crate::forms::{self, HOMEWORK_LIMIT, ROOM_LIMIT, SUBJECT_LIMIT};
 use crate::lessons::{Lesson, Lessons, parse_lesson};
 use crate::tutorial::Anchor;
 
@@ -15,7 +16,7 @@ pub fn schedule_page(status: &gtk::Label, lessons: Lessons) -> gtk::Box {
     let date = date_button(&calendar);
     Anchor::Date.mark(&date);
     let list = column(0);
-    render_lessons(&list, &lessons, &calendar, status);
+    render_lessons(&list, &lessons, &calendar, status, None);
 
     let toolbar = adw::WrapBox::new();
     toolbar.set_child_spacing(8);
@@ -78,13 +79,19 @@ pub fn schedule_page(status: &gtk::Label, lessons: Lessons) -> gtk::Box {
 
     page.connect_map(move |_| {
         if let Some(list) = list_for_map.upgrade() {
-            render_lessons(&list, &items_for_map, &calendar_for_map, &status_for_map);
+            render_lessons(
+                &list,
+                &items_for_map,
+                &calendar_for_map,
+                &status_for_map,
+                None,
+            );
         }
     });
 
     calendar.connect_day_selected(move |calendar| {
         if let Some(list) = weak_list.upgrade() {
-            render_lessons(&list, &lessons, calendar, &status);
+            render_lessons(&list, &lessons, calendar, &status, None);
         }
     });
     page
@@ -113,18 +120,74 @@ fn date_button(calendar: &gtk::Calendar) -> gtk::MenuButton {
     let button = gtk::MenuButton::new();
     button.set_label(&selected_date(calendar).format("%d.%m.%Y").to_string());
     let popover = gtk::Popover::new();
-    popover.set_child(Some(calendar));
+    let preview = gtk::Calendar::new();
+    popover.set_child(Some(&preview));
     button.set_popover(Some(&popover));
     let weak_button = button.downgrade();
-    let weak_popover = popover.downgrade();
     calendar.connect_day_selected(move |calendar| {
         if let Some(button) = weak_button.upgrade() {
             button.set_label(&selected_date(calendar).format("%d.%m.%Y").to_string());
         }
+    });
+    let weak_calendar = calendar.downgrade();
+    let weak_popover = popover.downgrade();
+    let select = Rc::new(preview.connect_day_selected(move |preview| {
+        if let Some(calendar) = weak_calendar.upgrade() {
+            calendar.select_day(&preview.date());
+        }
         if let Some(popover) = weak_popover.upgrade() {
             popover.popdown();
         }
+    }));
+    let committed = calendar.clone();
+    let map_selection = Rc::clone(&select);
+    preview.connect_map(move |preview| {
+        preview.block_signal(&map_selection);
+        preview.select_day(&committed.date());
+        preview.unblock_signal(&map_selection);
     });
+    let keys = gtk::EventControllerKey::new();
+    keys.set_propagation_phase(gtk::PropagationPhase::Capture);
+    let (weak_preview, weak_popover, weak_calendar) = (
+        preview.downgrade(),
+        popover.downgrade(),
+        calendar.downgrade(),
+    );
+    keys.connect_key_pressed(move |_, key, _, modifiers| {
+        use gtk::gdk::{Key, ModifierType};
+        use gtk::glib::Propagation;
+        let Some(preview) = weak_preview.upgrade().filter(|preview| preview.has_focus()) else {
+            return Propagation::Proceed;
+        };
+        if modifiers.intersects(
+            ModifierType::CONTROL_MASK | ModifierType::ALT_MASK | ModifierType::SUPER_MASK,
+        ) {
+            return Propagation::Proceed;
+        }
+        let offset = match key {
+            Key::Left | Key::KP_Left => -1,
+            Key::Right | Key::KP_Right => 1,
+            Key::Up | Key::KP_Up => -7,
+            Key::Down | Key::KP_Down => 7,
+            Key::Return | Key::KP_Enter | Key::space | Key::KP_Space => {
+                if let Some(calendar) = weak_calendar.upgrade() {
+                    calendar.select_day(&preview.date());
+                }
+                if let Some(popover) = weak_popover.upgrade() {
+                    popover.popdown();
+                }
+                return Propagation::Stop;
+            }
+            _ => return Propagation::Proceed,
+        };
+        if let Ok(date) = preview.date().add_days(offset) {
+            preview.block_signal(&select);
+            preview.select_day(&date);
+            preview.unblock_signal(&select);
+        }
+        Propagation::Stop
+    });
+    preview.add_controller(keys);
     button
 }
 
@@ -133,6 +196,7 @@ fn render_lessons(
     lessons: &Lessons,
     calendar: &gtk::Calendar,
     status: &gtk::Label,
+    focus_time: Option<NaiveTime>,
 ) {
     while let Some(child) = list.first_child() {
         list.remove(&child);
@@ -182,6 +246,7 @@ fn render_lessons(
             details.append(&text(&format!("{label}: {}", lesson.homework), "muted"));
         }
         row.append(&details);
+        let mut focus = None;
         for (icon, label, editing) in [
             ("document-edit-symbolic", "Изменить урок", true),
             ("user-trash-symbolic", "Удалить урок", false),
@@ -192,6 +257,9 @@ fn render_lessons(
             button.set_valign(gtk::Align::Center);
             if editing {
                 Anchor::EditLesson.mark(&button);
+                if focus_time == Some(lesson.time) {
+                    focus = Some(button.clone());
+                }
             }
             let (items, calendar, status, weak_list) = (
                 lessons.clone(),
@@ -217,7 +285,27 @@ fn render_lessons(
                             let result = items.delete_lesson(index);
                             match result {
                                 Ok(()) => {
-                                    render_lessons(&list, &items, &calendar, &feedback);
+                                    let focus_time = {
+                                        let date = selected_date(&calendar);
+                                        let items = items.borrow();
+                                        items
+                                            .iter()
+                                            .skip(index)
+                                            .find(|lesson| lesson.date == date)
+                                            .or_else(|| {
+                                                items
+                                                    .iter()
+                                                    .rev()
+                                                    .find(|lesson| lesson.date == date)
+                                            })
+                                            .map(|lesson| lesson.time)
+                                    };
+                                    render_lessons(&list, &items, &calendar, &feedback, focus_time);
+                                    if focus_time.is_none()
+                                        && let Some(page) = list.parent()
+                                    {
+                                        page.child_focus(gtk::DirectionType::TabForward);
+                                    }
                                     notify(&feedback, "Урок удалён");
                                 }
                                 Err(error) => {
@@ -231,6 +319,9 @@ fn render_lessons(
             row.append(&button);
         }
         list.append(&row);
+        if let Some(focus) = focus {
+            focus.grab_focus();
+        }
     }
 }
 
@@ -288,8 +379,13 @@ impl TimePicker {
             || self.minute.text().parse::<i32>().ok() != Some(self.minute.value_as_int())
     }
 
-    fn has_invalid_input(&self) -> bool {
-        self.invalid_hour.get() || self.invalid_minute.get()
+    fn invalid_input(&self) -> Option<&gtk::SpinButton> {
+        [
+            (&self.hour, &self.invalid_hour),
+            (&self.minute, &self.invalid_minute),
+        ]
+        .into_iter()
+        .find_map(|(spin, invalid)| invalid.get().then_some(spin))
     }
 }
 
@@ -433,6 +529,7 @@ fn on_add_lesson(
         ));
     }
     let title = field(&form, "Предмет", "Например, алгебра");
+    let title_error = forms::error_label(&form, &title);
     let suggestions = gtk::ListBox::new();
     suggestions.set_selection_mode(gtk::SelectionMode::Single);
     suggestions.set_activate_on_single_click(true);
@@ -460,7 +557,9 @@ fn on_add_lesson(
     number.set_selected(selected_bell.map_or(0, |index| index as u32 + 1));
     form.append(&number);
 
-    let times = gtk::Box::new(gtk::Orientation::Horizontal, 24);
+    let times = adw::WrapBox::new();
+    times.set_child_spacing(24);
+    times.set_line_spacing(12);
     let start_picker = TimePicker::new(start, "начало");
     let end_picker = TimePicker::new(finish, "конец");
     for (label, picker) in [("Начало", &start_picker), ("Конец", &end_picker)] {
@@ -470,6 +569,7 @@ fn on_add_lesson(
         times.append(&group);
     }
     form.append(&times);
+    let time_error = forms::error_label(&form, &times);
     let duration = Rc::new(Cell::new(
         existing.as_ref().map_or(lesson_minutes, |lesson| {
             (lesson.end - lesson.time).num_minutes()
@@ -568,21 +668,13 @@ fn on_add_lesson(
     }
     let room = field(&form, "Кабинет", "Например, 43 или спортзал");
 
-    form.append(&text("Домашнее задание", "section"));
-
-    let homework = gtk::TextView::new();
-    homework.set_wrap_mode(gtk::WrapMode::WordChar);
-    homework.set_top_margin(10);
-    homework.set_bottom_margin(10);
-    homework.set_left_margin(10);
-    homework.set_right_margin(10);
-
-    let homework_scroll = gtk::ScrolledWindow::new();
-    homework_scroll.set_min_content_height(100);
-    homework_scroll.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Automatic);
-    homework_scroll.set_child(Some(&homework));
-
+    let room_error = forms::error_label(&form, &room);
+    let (homework_scroll, homework) = forms::homework_editor(100);
+    let homework_label = text("Домашнее задание", "section");
+    homework_label.set_mnemonic_widget(Some(&homework));
+    form.append(&homework_label);
     form.append(&homework_scroll);
+    let homework_error = forms::error_label(&form, &homework_scroll);
 
     if let Some(lesson) = &existing {
         title.set_text(&lesson.title);
@@ -593,10 +685,18 @@ fn on_add_lesson(
 
     let feedback = text("", "muted");
     feedback.set_visible(false);
-    for entry in [&title, &room] {
+    for (entry, error) in [(&title, &title_error), (&room, &room_error)] {
         let feedback = feedback.clone();
-        entry.connect_changed(move |_| feedback.set_visible(false));
+        let error = error.clone();
+        entry.connect_changed(move |_| {
+            feedback.set_visible(false);
+            error.set_visible(false);
+        });
     }
+    let editor_error = homework_error.clone();
+    homework
+        .buffer()
+        .connect_changed(move |_| editor_error.set_visible(false));
     for spin in [
         &start_picker.hour,
         &start_picker.minute,
@@ -604,7 +704,11 @@ fn on_add_lesson(
         &end_picker.minute,
     ] {
         let feedback = feedback.clone();
-        spin.connect_value_changed(move |_| feedback.set_visible(false));
+        let time_error = time_error.clone();
+        spin.connect_changed(move |_| {
+            feedback.set_visible(false);
+            time_error.set_visible(false);
+        });
     }
     {
         let (feedback, items, number, start, end, duration, syncing, bells) = (
@@ -678,18 +782,7 @@ fn on_add_lesson(
             window.close();
         }
     });
-    let escape = gtk::EventControllerKey::new();
-    let weak_window = window.downgrade();
-    escape.connect_key_pressed(move |_, key, _, _| {
-        if key == gtk::gdk::Key::Escape {
-            if let Some(window) = weak_window.upgrade() {
-                window.close();
-            }
-            return gtk::glib::Propagation::Stop;
-        }
-        gtk::glib::Propagation::Proceed
-    });
-    window.add_controller(escape);
+    forms::dialog_keys(&window, &cancel, Some(&save));
     let (items, calendar, status, weak_list, weak_window) = (
         lessons.clone(),
         calendar.clone(),
@@ -699,11 +792,67 @@ fn on_add_lesson(
     );
     let title_for_focus = title.clone();
     save.connect_clicked(move |_| {
-        if start_picker.has_invalid_input() || end_picker.has_invalid_input() {
+        for error in [
+            &title_error,
+            &room_error,
+            &homework_error,
+            &time_error,
+            &feedback,
+        ] {
+            error.set_visible(false);
+        }
+        let title_value = title.text();
+        let room_value = room.text();
+        let buffer = homework.buffer();
+        let homework_value = buffer.text(&buffer.start_iter(), &buffer.end_iter(), false);
+        for (value, previous, limit, widget, label, empty) in [
+            (
+                title_value.trim(),
+                existing.as_ref().map_or("", |lesson| lesson.title.trim()),
+                SUBJECT_LIMIT,
+                title.upcast_ref::<gtk::Widget>(),
+                &title_error,
+                Some("Введите название предмета"),
+            ),
+            (
+                room_value.trim(),
+                existing.as_ref().map_or("", |lesson| lesson.room.trim()),
+                ROOM_LIMIT,
+                room.upcast_ref::<gtk::Widget>(),
+                &room_error,
+                Some("Введите кабинет"),
+            ),
+            (
+                homework_value.trim(),
+                existing
+                    .as_ref()
+                    .map_or("", |lesson| lesson.homework.trim()),
+                HOMEWORK_LIMIT,
+                homework.upcast_ref::<gtk::Widget>(),
+                &homework_error,
+                None,
+            ),
+        ] {
+            let error = if value.is_empty() {
+                empty.map(str::to_owned)
+            } else {
+                forms::length_error(value, previous, limit)
+            };
+            if let Some(error) = error {
+                notify(label, &error);
+                widget.grab_focus();
+                return;
+            }
+        }
+        if let Some(spin) = [&start_picker, &end_picker]
+            .into_iter()
+            .find_map(TimePicker::invalid_input)
+        {
             notify(
-                &feedback,
+                &time_error,
                 "Проверьте время. Часы от 0 до 23, минуты от 0 до 59.",
             );
+            spin.grab_focus();
             return;
         }
         let pending_start = start_picker.has_pending_input();
@@ -721,6 +870,14 @@ fn on_add_lesson(
         {
             number.set_selected(0);
         }
+        if end_picker.time() <= start_picker.time() {
+            notify(
+                &time_error,
+                "Конец урока должен быть позже начала в тот же день",
+            );
+            end_picker.hour.grab_focus();
+            return;
+        }
         let date = selected_date(&date_picker);
         let result = parse_lesson(
             title.text().as_str(),
@@ -730,12 +887,18 @@ fn on_add_lesson(
             room.text().as_str(),
         )
         .and_then(|mut lesson| {
-            let buffer = homework.buffer();
-
-            let entered = buffer.text(&buffer.start_iter(), &buffer.end_iter(), false);
-            lesson.homework = entered.trim().to_string();
+            lesson.homework = homework_value.trim().to_string();
 
             if let Some(previous) = &existing {
+                if title_value == previous.title {
+                    lesson.title.clone_from(&previous.title);
+                }
+                if room_value == previous.room {
+                    lesson.room.clone_from(&previous.room);
+                }
+                if homework_value == previous.homework {
+                    lesson.homework.clone_from(&previous.homework);
+                }
                 lesson.homework_completed =
                     previous.homework_completed && previous.homework == lesson.homework;
             }
@@ -746,7 +909,8 @@ fn on_add_lesson(
             Ok(()) => {
                 select_date(&calendar, date);
                 if let Some(list) = weak_list.upgrade() {
-                    render_lessons(&list, &items, &calendar, &status);
+                    let focus = index.map(|_| start_picker.time());
+                    render_lessons(&list, &items, &calendar, &status, focus);
                 }
                 notify(
                     &status,

@@ -1,6 +1,7 @@
 #![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 
 mod bells;
+mod forms;
 mod homework;
 mod lessons;
 mod schedule;
@@ -34,6 +35,9 @@ button.primary { background: alpha(@window_fg_color, 0.10); color: @window_fg_co
 button.primary:hover { background: alpha(@window_fg_color, 0.15); }
 entry { background: @view_bg_color; color: @view_fg_color; border: 1px solid alpha(@window_fg_color, 0.15); padding: 8px 10px; border-radius: 6px; }
 entry:focus-within { border-color: alpha(@window_fg_color, 0.55); }
+.form-error { color: @error_color; }
+.homework-editor { border: 1px solid alpha(@window_fg_color, 0.15); border-radius: 6px; }
+.homework-editor:focus-within { border-color: alpha(@window_fg_color, 0.55); }
 .status { opacity: 0.80; padding-top: 12px; border-top: 1px solid alpha(@window_fg_color, 0.10); }
 .settings-section { padding-top: 20px; border-top: 1px solid alpha(@window_fg_color, 0.10); }
 .settings-title { font-size: 16px; font-weight: 600; }
@@ -136,8 +140,6 @@ fn build_window(app: &adw::Application) {
     root.append(&header);
 
     let pages = gtk::Stack::new();
-    pages.set_transition_type(gtk::StackTransitionType::Crossfade);
-    pages.set_transition_duration(120);
     pages.set_vhomogeneous(false);
     let status = text("", "status");
     status.set_visible(false);
@@ -250,6 +252,33 @@ fn build_window(app: &adw::Application) {
         .content(&overlay)
         .build();
     window.add_breakpoint(compact);
+    let keys = gtk::EventControllerKey::new();
+    keys.set_propagation_phase(gtk::PropagationPhase::Capture);
+    let shortcut_tabs = tabs.each_ref().map(|tab| tab.downgrade());
+    let weak_root = root.downgrade();
+    keys.connect_key_pressed(move |_, key, _, modifiers| {
+        use gtk::gdk::{Key, ModifierType};
+        if !modifiers.contains(ModifierType::CONTROL_MASK)
+            || modifiers.intersects(
+                ModifierType::SHIFT_MASK | ModifierType::ALT_MASK | ModifierType::SUPER_MASK,
+            )
+            || !weak_root.upgrade().is_some_and(|root| root.can_focus())
+        {
+            return gtk::glib::Propagation::Proceed;
+        }
+        let index = match key {
+            Key::_1 | Key::KP_1 => 0,
+            Key::_2 | Key::KP_2 => 1,
+            Key::_3 | Key::KP_3 => 2,
+            _ => return gtk::glib::Propagation::Proceed,
+        };
+        if let Some(tab) = shortcut_tabs[index].upgrade() {
+            tab.grab_focus();
+            tab.set_active(true);
+        }
+        gtk::glib::Propagation::Stop
+    });
+    window.add_controller(keys);
     window.connect_destroy(move |_| {
         let _ = &data_guard;
     });
@@ -344,8 +373,10 @@ fn empty_state(icon: &str, title: &str, description: &str) -> gtk::Box {
 }
 
 fn field(form: &gtk::Box, title: &str, placeholder: &str) -> gtk::Entry {
-    form.append(&text(title, "section"));
     let entry = gtk::Entry::builder().placeholder_text(placeholder).build();
+    let label = text(title, "section");
+    label.set_mnemonic_widget(Some(&entry));
+    form.append(&label);
     form.append(&entry);
     entry
 }
@@ -403,19 +434,7 @@ fn confirm_delete(status: &gtk::Label, heading: &str, body: &str, confirm: impl 
             window.close();
         }
     });
-    let keys = gtk::EventControllerKey::new();
-    let weak = window.downgrade();
-    keys.connect_key_pressed(move |_, key, _, _| {
-        if key == gtk::gdk::Key::Escape {
-            if let Some(window) = weak.upgrade() {
-                window.close();
-            }
-            gtk::glib::Propagation::Stop
-        } else {
-            gtk::glib::Propagation::Proceed
-        }
-    });
-    window.add_controller(keys);
+    forms::dialog_keys(&window, &cancel, None);
     window.present();
     cancel.grab_focus();
 }

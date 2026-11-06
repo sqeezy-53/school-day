@@ -1,5 +1,6 @@
 use adw::prelude::*;
 
+use crate::forms::{self, HOMEWORK_LIMIT};
 use crate::lessons::Lessons;
 use crate::tutorial::Anchor;
 use crate::{column, margins, notify, page, primary, text};
@@ -24,21 +25,26 @@ pub fn homework_page(status: &gtk::Label, lessons: Lessons) -> gtk::Box {
 
     page.append(&list);
 
-    render_homework(&list, &lessons, status);
+    render_homework(&list, &lessons, status, None);
 
     let weak_list = list.downgrade();
     let status = status.clone();
 
     page.connect_map(move |_| {
         if let Some(list) = weak_list.upgrade() {
-            render_homework(&list, &lessons, &status);
+            render_homework(&list, &lessons, &status, None);
         }
     });
 
     page
 }
 
-fn render_homework(list: &gtk::Box, lessons: &Lessons, status: &gtk::Label) {
+fn render_homework(
+    list: &gtk::Box,
+    lessons: &Lessons,
+    status: &gtk::Label,
+    focus_index: Option<usize>,
+) {
     while let Some(child) = list.first_child() {
         list.remove(&child);
     }
@@ -53,15 +59,28 @@ fn render_homework(list: &gtk::Box, lessons: &Lessons, status: &gtk::Label) {
 
     if tasks.is_empty() {
         list.append(&text("Заданий пока нет. Нажмите «Добавить ДЗ».", "muted"));
+        if focus_index.is_some()
+            && let Some(page) = list.parent()
+        {
+            page.child_focus(gtk::DirectionType::TabForward);
+        }
         return;
     }
 
+    let focus_index = focus_index.and_then(|wanted| {
+        tasks
+            .iter()
+            .find(|(index, _)| *index >= wanted)
+            .or_else(|| tasks.last())
+            .map(|(index, _)| *index)
+    });
     for (index, lesson) in tasks {
         let row = gtk::Box::new(gtk::Orientation::Horizontal, 12);
         row.add_css_class("panel");
 
         let checkbox = gtk::CheckButton::new();
         Anchor::CompleteHomework.mark(&checkbox);
+        checkbox.set_tooltip_text(Some(&format!("ДЗ выполнено: {}", lesson.title)));
         checkbox.set_valign(gtk::Align::Start);
         checkbox.set_active(lesson.homework_completed);
 
@@ -108,7 +127,7 @@ fn render_homework(list: &gtk::Box, lessons: &Lessons, status: &gtk::Label) {
                     match result {
                         Ok(()) => {
                             if let Some(list) = list.upgrade() {
-                                render_homework(&list, &items, &feedback);
+                                render_homework(&list, &items, &feedback, Some(index));
                             }
                             notify(&feedback, "Домашнее задание удалено");
                         }
@@ -153,6 +172,9 @@ fn render_homework(list: &gtk::Box, lessons: &Lessons, status: &gtk::Label) {
         row.append(&edit);
         row.append(&delete);
         list.append(&row);
+        if focus_index == Some(index) {
+            edit.grab_focus();
+        }
     }
 }
 
@@ -221,35 +243,39 @@ fn on_edit_homework(status: &gtk::Label, lessons: &Lessons, list: &gtk::Box, ind
             "muted",
         ));
     }
-    form.append(&text("К какому уроку", "section"));
+    let selector_label = text("К какому уроку", "section");
+    selector_label.set_mnemonic_widget(Some(&selector));
+    form.append(&selector_label);
     form.append(&selector);
-    form.append(&text("Задание", "section"));
 
-    let editor = gtk::TextView::new();
-    editor.set_wrap_mode(gtk::WrapMode::WordChar);
-    editor.set_top_margin(10);
-    editor.set_bottom_margin(10);
-    editor.set_left_margin(10);
-    editor.set_right_margin(10);
+    let (scroll, editor) = forms::homework_editor(140);
     editor.buffer().set_text(&choices[0].1.homework);
-
-    let scroll = gtk::ScrolledWindow::new();
-    scroll.set_min_content_height(140);
-    scroll.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Automatic);
-    scroll.set_child(Some(&editor));
+    let editor_label = text("Задание", "section");
+    editor_label.set_mnemonic_widget(Some(&editor));
+    form.append(&editor_label);
     form.append(&scroll);
 
-    let feedback = text("", "muted");
-    feedback.set_visible(false);
-    form.append(&feedback);
+    let feedback = forms::error_label(&form, &scroll);
+    let editor_feedback = feedback.clone();
+    editor
+        .buffer()
+        .connect_changed(move |_| editor_feedback.set_visible(false));
     let actions = gtk::Box::new(gtk::Orientation::Horizontal, 8);
     actions.set_halign(gtk::Align::End);
     let cancel = gtk::Button::with_label("Отмена");
     let save = primary("Сохранить");
     actions.append(&cancel);
     actions.append(&save);
-    form.append(&actions);
-    root.append(&form);
+    let form_scroll = gtk::ScrolledWindow::new();
+    form_scroll.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Automatic);
+    form_scroll.set_vexpand(true);
+    form_scroll.set_child(Some(&form));
+    root.append(&form_scroll);
+    actions.set_margin_start(24);
+    actions.set_margin_end(24);
+    actions.set_margin_top(12);
+    actions.set_margin_bottom(16);
+    root.append(&actions);
 
     let window = adw::Window::builder()
         .title(heading)
@@ -267,36 +293,42 @@ fn on_edit_homework(status: &gtk::Label, lessons: &Lessons, list: &gtk::Box, ind
             window.close();
         }
     });
-    let escape = gtk::EventControllerKey::new();
-    let weak_window = window.downgrade();
-    escape.connect_key_pressed(move |_, key, _, _| {
-        if key == gtk::gdk::Key::Escape {
-            if let Some(window) = weak_window.upgrade() {
-                window.close();
-            }
-            return gtk::glib::Propagation::Stop;
-        }
-        gtk::glib::Propagation::Proceed
-    });
-    window.add_controller(escape);
+    forms::dialog_keys(&window, &cancel, Some(&save));
 
     let items = lessons.clone();
     let status = status.clone();
     let weak_list = list.downgrade();
     let weak_window = window.downgrade();
     let buffer = editor.buffer();
+    let selector_for_focus = selector.clone();
+    let editor_for_focus = editor.clone();
     save.connect_clicked(move |_| {
         // Позиция в выпадающем списке соответствует паре с исходным индексом урока.
-        let Some((index, _)) = choices.get(selector.selected() as usize) else {
+        let Some((lesson_index, lesson)) = choices.get(selector.selected() as usize) else {
             notify(&feedback, "Выберите урок");
+            selector.grab_focus();
             return;
         };
         let value = buffer.text(&buffer.start_iter(), &buffer.end_iter(), false);
-        let result = items.set_homework_text(*index, &value);
+        let error = if value.trim().is_empty() {
+            Some("Напишите домашнее задание".to_string())
+        } else {
+            forms::length_error(value.trim(), lesson.homework.trim(), HOMEWORK_LIMIT)
+        };
+        if let Some(error) = error {
+            notify(&feedback, &error);
+            editor.grab_focus();
+            return;
+        }
+        let result = if value == lesson.homework {
+            Ok(())
+        } else {
+            items.set_homework_text(*lesson_index, &value)
+        };
         match result {
             Ok(()) => {
                 if let Some(list) = weak_list.upgrade() {
-                    render_homework(&list, &items, &status);
+                    render_homework(&list, &items, &status, index);
                 }
                 notify(&status, "Домашнее задание сохранено");
                 if let Some(window) = weak_window.upgrade() {
@@ -308,5 +340,9 @@ fn on_edit_homework(status: &gtk::Label, lessons: &Lessons, list: &gtk::Box, ind
     });
 
     window.present();
-    editor.grab_focus();
+    if selector_for_focus.is_sensitive() {
+        selector_for_focus.grab_focus();
+    } else {
+        editor_for_focus.grab_focus();
+    }
 }

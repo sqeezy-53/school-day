@@ -4,6 +4,7 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use crate::bells::BellSchedule;
+use crate::forms::{self, CLASS_LIMIT};
 use crate::tutorial::Anchor;
 use crate::{column, field, notify, primary, text};
 
@@ -208,6 +209,7 @@ fn settings_form(status: &gtk::Label, brand: &gtk::Label, container: &gtk::Box) 
 
     let class = field(&page, "Класс", "Например, 7А");
     class.set_text(&loaded.class);
+    let class_error = forms::error_label(&page, &class);
 
     page.append(&text("Тема", "section"));
 
@@ -242,6 +244,7 @@ fn settings_form(status: &gtk::Label, brand: &gtk::Label, container: &gtk::Box) 
     let saved = Rc::clone(&current);
 
     let weak_class = class.downgrade();
+    let weak_class_error = class_error.downgrade();
     let weak_theme = theme.downgrade();
 
     let weak_times = [
@@ -262,13 +265,22 @@ fn settings_form(status: &gtk::Label, brand: &gtk::Label, container: &gtk::Box) 
             return;
         }
 
-        let (Some(class), Some(theme), Some(status), Some(brand), Some(automatic)) = (
+        let (
+            Some(class),
+            Some(class_error),
+            Some(theme),
+            Some(status),
+            Some(brand),
+            Some(automatic),
+        ) = (
             weak_class.upgrade(),
+            weak_class_error.upgrade(),
             weak_theme.upgrade(),
             weak_status.upgrade(),
             weak_brand.upgrade(),
             weak_automatic.upgrade(),
-        ) else {
+        )
+        else {
             return;
         };
 
@@ -289,8 +301,21 @@ fn settings_form(status: &gtk::Label, brand: &gtk::Label, container: &gtk::Box) 
 
         updating.set(false);
 
+        let entered_class = class.text();
+        let mut class_value = entered_class.trim().to_string();
+        if let Some(error) =
+            forms::length_error(&class_value, saved.borrow().class.trim(), CLASS_LIMIT)
+        {
+            notify(&class_error, &error);
+            class_value = saved.borrow().class.clone();
+        } else {
+            class_error.set_visible(false);
+            if entered_class == saved.borrow().class {
+                class_value = saved.borrow().class.clone();
+            }
+        }
         let candidate = Settings {
-            class: class.text().trim().to_string(),
+            class: class_value,
 
             theme: match theme.selected() {
                 0 => Theme::Light,
