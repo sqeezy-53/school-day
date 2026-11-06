@@ -5,7 +5,7 @@ use std::rc::Rc;
 
 use crate::bells::Bell;
 use crate::forms::{self, HOMEWORK_LIMIT, ROOM_LIMIT, SUBJECT_LIMIT};
-use crate::lessons::{Lesson, Lessons, parse_lesson};
+use crate::lessons::{Lesson, Lessons, RecordId, parse_lesson};
 use crate::tutorial::Anchor;
 
 use crate::{column, empty_state, field, margins, notify, page, primary, text};
@@ -201,13 +201,11 @@ fn render_lessons(
     while let Some(child) = list.first_child() {
         list.remove(&child);
     }
-    // Сохраняем исходные индексы: в окне показываются уроки только выбранной даты.
     let day: Vec<_> = lessons
         .borrow()
         .iter()
-        .enumerate()
-        .filter(|(_, lesson)| lesson.date == selected_date(calendar))
-        .map(|(index, lesson)| (index, lesson.clone()))
+        .filter(|lesson| lesson.date == selected_date(calendar))
+        .cloned()
         .collect();
     if day.is_empty() {
         list.append(&empty_state(
@@ -217,7 +215,8 @@ fn render_lessons(
         ));
         return;
     }
-    for (index, lesson) in day {
+    for lesson in day {
+        let (id, time_of_lesson) = (lesson.id, lesson.time);
         let row = gtk::Box::new(gtk::Orientation::Horizontal, 16);
         row.add_css_class("panel");
         let time = text(
@@ -272,7 +271,7 @@ fn render_lessons(
                     return;
                 };
                 if editing {
-                    on_add_lesson(&status, &items, &list, &calendar, Some(index));
+                    on_add_lesson(&status, &items, &list, &calendar, Some(id));
                 } else {
                     let items = items.clone();
                     let calendar = calendar.clone();
@@ -282,7 +281,7 @@ fn render_lessons(
                         "Удалить урок?",
                         "Урок и его домашнее задание будут удалены.",
                         move || {
-                            let result = items.delete_lesson(index);
+                            let result = items.delete_lesson(id);
                             match result {
                                 Ok(()) => {
                                     let focus_time = {
@@ -290,8 +289,9 @@ fn render_lessons(
                                         let items = items.borrow();
                                         items
                                             .iter()
-                                            .skip(index)
-                                            .find(|lesson| lesson.date == date)
+                                            .find(|lesson| {
+                                                lesson.date == date && lesson.time > time_of_lesson
+                                            })
                                             .or_else(|| {
                                                 items
                                                     .iter()
@@ -477,7 +477,7 @@ fn on_add_lesson(
     lessons: &Lessons,
     list: &gtk::Box,
     calendar: &gtk::Calendar,
-    index: Option<usize>,
+    id: Option<RecordId>,
 ) {
     let Some(parent) = status
         .root()
@@ -494,7 +494,17 @@ fn on_add_lesson(
             return;
         }
     };
-    let existing = index.and_then(|index| lessons.borrow().get(index).cloned());
+    let existing = id.and_then(|id| {
+        lessons
+            .borrow()
+            .iter()
+            .find(|lesson| lesson.id == id)
+            .cloned()
+    });
+    if id.is_some() && existing.is_none() {
+        notify(status, "Урок уже удалён");
+        return;
+    }
     let date = existing
         .as_ref()
         .map_or_else(|| selected_date(calendar), |lesson| lesson.date);
@@ -511,7 +521,7 @@ fn on_add_lesson(
     };
     let root = column(0);
     let header = adw::HeaderBar::new();
-    let heading = if index.is_some() {
+    let heading = if id.is_some() {
         "Изменить урок"
     } else {
         "Добавить урок"
@@ -576,7 +586,7 @@ fn on_add_lesson(
         }),
     ));
     let syncing = Rc::new(Cell::new(false));
-    let automatic_time = Rc::new(Cell::new(index.is_none()));
+    let automatic_time = Rc::new(Cell::new(id.is_none()));
     {
         let (start, end, duration, syncing, choices, automatic) = (
             start_picker.clone(),
@@ -743,7 +753,7 @@ fn on_add_lesson(
     let actions = gtk::Box::new(gtk::Orientation::Horizontal, 8);
     actions.set_halign(gtk::Align::End);
     let cancel = gtk::Button::with_label("Отмена");
-    let save = primary(if index.is_some() {
+    let save = primary(if id.is_some() {
         "Сохранить"
     } else {
         "Добавить"
@@ -902,22 +912,23 @@ fn on_add_lesson(
                 lesson.homework_completed =
                     previous.homework_completed && previous.homework == lesson.homework;
             }
-            items.store_lesson(lesson, index)
+            items.store_lesson(lesson, id)
         });
 
         match result {
-            Ok(()) => {
+            Ok(attached) => {
                 select_date(&calendar, date);
                 if let Some(list) = weak_list.upgrade() {
-                    let focus = index.map(|_| start_picker.time());
+                    let focus = id.map(|_| start_picker.time());
                     render_lessons(&list, &items, &calendar, &status, focus);
                 }
                 notify(
                     &status,
-                    if index.is_some() {
-                        "Урок сохранён"
-                    } else {
-                        "Урок добавлен"
+                    match (id.is_some(), attached) {
+                        (true, true) => "Урок сохранён, ДЗ прикреплено",
+                        (false, true) => "Урок добавлен, ДЗ прикреплено",
+                        (true, false) => "Урок сохранён",
+                        (false, false) => "Урок добавлен",
                     },
                 );
                 if let Some(window) = weak_window.upgrade() {
