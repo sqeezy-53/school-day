@@ -6,13 +6,12 @@ mod lessons;
 mod schedule;
 mod settings;
 mod storage;
+mod tutorial;
 #[cfg(target_os = "windows")]
 mod windows;
 
 use adw::prelude::*;
 use schedule::schedule_page;
-use std::cell::RefCell;
-use std::rc::Rc;
 
 const APP_ID: &str = "io.github.sqeezy_53.school-day";
 
@@ -21,6 +20,7 @@ const CSS: &str = r#"
 window { background: @window_bg_color; color: @window_fg_color; }
 headerbar { background: @headerbar_bg_color; box-shadow: none; border-bottom: 1px solid alpha(@window_fg_color, 0.10); min-height: 48px; }
 .brand { font-size: 12px; font-weight: 600; opacity: 0.65; }
+.brand-logo { color: @headerbar_fg_color; background: alpha(@headerbar_fg_color, 0.12); border-radius: 5px; }
 .title { font-size: 23px; font-weight: 600; letter-spacing: -0.4px; }
 .muted { opacity: 0.60; }
 .section { font-size: 13px; font-weight: 500; }
@@ -108,8 +108,11 @@ fn build_window(app: &adw::Application) {
     brand.set_wrap(false);
     brand.set_ellipsize(gtk::pango::EllipsizeMode::End);
     brand.set_max_width_chars(24);
-    brand.set_margin_start(10);
-    header.pack_start(&brand);
+    let identity = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+    identity.set_margin_start(10);
+    identity.append(&brand_logo());
+    identity.append(&brand);
+    header.pack_start(&identity);
     root.append(&header);
 
     let pages = gtk::Stack::new();
@@ -119,11 +122,12 @@ fn build_window(app: &adw::Application) {
     let status = text("", "status");
     status.set_visible(false);
     // Обе вкладки получают ссылки на один список уроков и домашних заданий.
-    match lessons::load_lessons() {
+    let lessons_loaded = match lessons::load_lessons() {
         Ok(loaded) => {
-            let items = Rc::new(RefCell::new(loaded));
-            pages.add_named(&schedule_page(&status, Rc::clone(&items)), Some("schedule"));
+            let items = lessons::Lessons::new(loaded);
+            pages.add_named(&schedule_page(&status, items.clone()), Some("schedule"));
             pages.add_named(&homework::homework_page(&status, items), Some("homework"));
+            true
         }
         Err(error) => {
             // При ошибке загрузки не создаём пустой список для записи поверх файла.
@@ -135,17 +139,19 @@ fn build_window(app: &adw::Application) {
                 ));
                 pages.add_named(&content, Some(name));
             }
+            false
         }
-    }
+    };
     pages.add_named(&settings::settings_page(&status, &brand), Some("settings"));
     let navigation = gtk::Box::new(gtk::Orientation::Horizontal, 4);
     header.set_title_widget(Some(&navigation));
     let mut first: Option<gtk::ToggleButton> = None;
-    for (name, title, icon) in [
+    let tabs = [
         ("schedule", "Расписание", "x-office-calendar-symbolic"),
         ("homework", "ДЗ", "document-edit-symbolic"),
         ("settings", "Настройки", "emblem-system-symbolic"),
-    ] {
+    ]
+    .map(|(name, title, icon)| {
         let button = gtk::ToggleButton::new();
         let row = gtk::Box::new(gtk::Orientation::Horizontal, 12);
         row.append(&gtk::Image::from_icon_name(icon));
@@ -168,7 +174,8 @@ fn build_window(app: &adw::Application) {
             }
         });
         navigation.append(&button);
-    }
+        button
+    });
     let workspace = column(18);
     margins(&workspace, 32);
     workspace.set_valign(gtk::Align::Center);
@@ -185,17 +192,63 @@ fn build_window(app: &adw::Application) {
     scroll.set_vexpand(true);
     scroll.set_child(Some(&clamp));
     root.append(&scroll);
+    let overlay = gtk::Overlay::new();
+    overlay.set_child(Some(&root));
     let window = adw::ApplicationWindow::builder()
         .application(app)
         .title("Школьный день")
         .default_width(1040)
         .default_height(740)
-        .content(&root)
+        .content(&overlay)
         .build();
     window.connect_destroy(move |_| {
         let _ = &data_guard;
     });
+    tutorial::install(
+        &window,
+        &overlay,
+        &scroll,
+        &pages,
+        tabs,
+        &status,
+        lessons_loaded,
+    );
     window.present();
+}
+
+fn brand_logo() -> gtk::DrawingArea {
+    let logo = gtk::DrawingArea::new();
+    logo.set_content_width(22);
+    logo.set_content_height(22);
+    logo.set_valign(gtk::Align::Center);
+    logo.add_css_class("brand-logo");
+    logo.set_draw_func(|logo, context, width, height| {
+        let color = logo.style_context().color();
+        context.set_source_rgba(
+            color.red().into(),
+            color.green().into(),
+            color.blue().into(),
+            color.alpha().into(),
+        );
+        let scale = f64::from(width.min(height)) / 320.0;
+        context.translate(f64::from(width) / 2.0, f64::from(height) / 2.0);
+        context.scale(scale, scale);
+        context.translate(-256.0, -256.0);
+        context.set_line_width(22.0);
+        context.set_line_cap(gtk::cairo::LineCap::Round);
+        context.set_line_join(gtk::cairo::LineJoin::Round);
+        context.move_to(144.0, 208.0);
+        context.curve_to(181.0, 181.0, 218.0, 181.0, 256.0, 208.0);
+        context.curve_to(294.0, 181.0, 331.0, 181.0, 368.0, 208.0);
+        context.line_to(368.0, 328.0);
+        context.curve_to(331.0, 301.0, 294.0, 301.0, 256.0, 328.0);
+        context.curve_to(218.0, 301.0, 181.0, 301.0, 144.0, 328.0);
+        context.close_path();
+        context.move_to(256.0, 208.0);
+        context.line_to(256.0, 328.0);
+        let _ = context.stroke();
+    });
+    logo
 }
 
 fn column(spacing: i32) -> gtk::Box {

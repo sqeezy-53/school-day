@@ -1,15 +1,16 @@
 use adw::prelude::*;
-use std::rc::Rc;
 
-use crate::lessons::{Lessons, delete_homework, set_homework_completed, set_homework_text};
+use crate::lessons::Lessons;
+use crate::tutorial::Anchor;
 use crate::{column, margins, notify, page, primary, text};
 
 pub fn homework_page(status: &gtk::Label, lessons: Lessons) -> gtk::Box {
     let page = page("Домашние задания");
     let list = column(0);
     let add = primary("Добавить ДЗ");
+    Anchor::AddHomework.mark(&add);
 
-    let items_for_add = Rc::clone(&lessons);
+    let items_for_add = lessons.clone();
     let status_for_add = status.clone();
     let list_for_add = list.downgrade();
 
@@ -60,6 +61,7 @@ fn render_homework(list: &gtk::Box, lessons: &Lessons, status: &gtk::Label) {
         row.add_css_class("panel");
 
         let checkbox = gtk::CheckButton::new();
+        Anchor::CompleteHomework.mark(&checkbox);
         checkbox.set_valign(gtk::Align::Start);
         checkbox.set_active(lesson.homework_completed);
 
@@ -76,7 +78,7 @@ fn render_homework(list: &gtk::Box, lessons: &Lessons, status: &gtk::Label) {
         edit.set_tooltip_text(Some("Изменить ДЗ"));
         edit.set_valign(gtk::Align::Start);
 
-        let items_for_edit = Rc::clone(lessons);
+        let items_for_edit = lessons.clone();
         let status_for_edit = status.clone();
         let list_for_edit = list.downgrade();
 
@@ -90,11 +92,11 @@ fn render_homework(list: &gtk::Box, lessons: &Lessons, status: &gtk::Label) {
         delete.add_css_class("flat");
         delete.set_tooltip_text(Some("Удалить ДЗ"));
         delete.set_valign(gtk::Align::Start);
-        let items_for_delete = Rc::clone(lessons);
+        let items_for_delete = lessons.clone();
         let status_for_delete = status.clone();
         let list_for_delete = list.downgrade();
         delete.connect_clicked(move |_| {
-            let items = Rc::clone(&items_for_delete);
+            let items = items_for_delete.clone();
             let feedback = status_for_delete.clone();
             let list = list_for_delete.clone();
             crate::confirm_delete(
@@ -102,7 +104,7 @@ fn render_homework(list: &gtk::Box, lessons: &Lessons, status: &gtk::Label) {
                 "Удалить домашнее задание?",
                 "Сам урок останется в расписании.",
                 move || {
-                    let result = delete_homework(&mut items.borrow_mut(), index);
+                    let result = items.delete_homework(index);
                     match result {
                         Ok(()) => {
                             if let Some(list) = list.upgrade() {
@@ -116,7 +118,7 @@ fn render_homework(list: &gtk::Box, lessons: &Lessons, status: &gtk::Label) {
             );
         });
 
-        let items = Rc::clone(lessons);
+        let items = lessons.clone();
         let status = status.clone();
 
         checkbox.connect_toggled(move |checkbox| {
@@ -135,7 +137,7 @@ fn render_homework(list: &gtk::Box, lessons: &Lessons, status: &gtk::Label) {
                 return;
             }
 
-            let result = set_homework_completed(&mut items.borrow_mut(), index, active);
+            let result = items.set_homework_completed(index, active);
 
             match result {
                 Ok(()) => notify(&status, "Сохранено"),
@@ -213,6 +215,12 @@ fn on_edit_homework(status: &gtk::Label, lessons: &Lessons, list: &gtk::Box, ind
 
     let form = column(16);
     margins(&form, 24);
+    if lessons.is_practice() {
+        form.append(&text(
+            "Учебное ДЗ исчезнет после выхода из обучения.",
+            "muted",
+        ));
+    }
     form.append(&text("К какому уроку", "section"));
     form.append(&selector);
     form.append(&text("Задание", "section"));
@@ -272,7 +280,7 @@ fn on_edit_homework(status: &gtk::Label, lessons: &Lessons, list: &gtk::Box, ind
     });
     window.add_controller(escape);
 
-    let items = Rc::clone(lessons);
+    let items = lessons.clone();
     let status = status.clone();
     let weak_list = list.downgrade();
     let weak_window = window.downgrade();
@@ -284,7 +292,7 @@ fn on_edit_homework(status: &gtk::Label, lessons: &Lessons, list: &gtk::Box, ind
             return;
         };
         let value = buffer.text(&buffer.start_iter(), &buffer.end_iter(), false);
-        let result = set_homework_text(&mut items.borrow_mut(), *index, &value);
+        let result = items.set_homework_text(*index, &value);
         match result {
             Ok(()) => {
                 if let Some(list) = weak_list.upgrade() {

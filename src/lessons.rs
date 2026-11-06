@@ -1,8 +1,49 @@
 use chrono::{NaiveDate, NaiveTime};
-use std::cell::RefCell;
+use std::cell::{Ref, RefCell};
 use std::rc::Rc;
 
-pub type Lessons = Rc<RefCell<Vec<Lesson>>>;
+#[derive(Clone)]
+pub struct Lessons(Rc<LessonList>);
+
+struct LessonList {
+    items: RefCell<Vec<Lesson>>,
+    practice_changed: Option<Box<dyn Fn()>>,
+}
+
+impl Lessons {
+    pub fn new(items: Vec<Lesson>) -> Self {
+        Self(Rc::new(LessonList {
+            items: RefCell::new(items),
+            practice_changed: None,
+        }))
+    }
+
+    pub fn practice(on_change: impl Fn() + 'static) -> Self {
+        Self(Rc::new(LessonList {
+            items: RefCell::new(Vec::new()),
+            practice_changed: Some(Box::new(on_change)),
+        }))
+    }
+
+    pub fn borrow(&self) -> Ref<'_, Vec<Lesson>> {
+        self.0.items.borrow()
+    }
+
+    pub fn is_practice(&self) -> bool {
+        self.0.practice_changed.is_some()
+    }
+
+    fn replace(&self, updated: Vec<Lesson>) -> Result<(), String> {
+        if !self.is_practice() {
+            crate::storage::save_json("lessons.json", &updated)?;
+        }
+        *self.0.items.borrow_mut() = updated;
+        if let Some(on_change) = &self.0.practice_changed {
+            on_change();
+        }
+        Ok(())
+    }
+}
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Lesson {
@@ -112,97 +153,74 @@ fn validate_sorted_lessons(items: &[Lesson]) -> Result<(), String> {
     Ok(())
 }
 
-fn save_lessons(items: &[Lesson]) -> Result<(), String> {
-    crate::storage::save_json("lessons.json", items)
-}
-
-pub fn store_lesson(
-    items: &mut Vec<Lesson>,
-    lesson: Lesson,
-    index: Option<usize>,
-) -> Result<(), String> {
-    validate_lesson(&lesson)?;
-    check_slot(items, &lesson, index)?;
-    let mut updated = items.clone();
-    match index {
-        Some(index) => {
-            let previous = updated
-                .get_mut(index)
-                .ok_or("Урок уже удалён. Откройте форму заново")?;
-            *previous = lesson;
+impl Lessons {
+    pub fn store_lesson(&self, lesson: Lesson, index: Option<usize>) -> Result<(), String> {
+        validate_lesson(&lesson)?;
+        check_slot(&self.borrow(), &lesson, index)?;
+        let mut updated = self.borrow().clone();
+        match index {
+            Some(index) => {
+                let previous = updated
+                    .get_mut(index)
+                    .ok_or("Урок уже удалён. Откройте форму заново")?;
+                *previous = lesson;
+            }
+            None => updated.push(lesson),
         }
-        None => updated.push(lesson),
-    }
-    updated.sort_by_key(|lesson| (lesson.date, lesson.time));
-    save_lessons(&updated)?;
-    // В памяти и на экране данные меняются только после сохранения на диске.
-    *items = updated;
-    Ok(())
-}
-
-pub fn delete_lesson(items: &mut Vec<Lesson>, index: usize) -> Result<(), String> {
-    if index >= items.len() {
-        return Err("Урок уже удалён".to_string());
-    }
-    let mut updated = items.clone();
-    updated.remove(index);
-    save_lessons(&updated)?;
-    *items = updated;
-    Ok(())
-}
-
-pub fn set_homework_completed(
-    items: &mut Vec<Lesson>,
-    index: usize,
-    completed: bool,
-) -> Result<(), String> {
-    let mut updated = items.clone();
-
-    let lesson = updated.get_mut(index).ok_or("Урок не найден")?;
-
-    if lesson.homework.trim().is_empty() {
-        return Err("У этого урока нет домашнего задания".to_string());
+        updated.sort_by_key(|lesson| (lesson.date, lesson.time));
+        self.replace(updated)
     }
 
-    lesson.homework_completed = completed;
-
-    save_lessons(&updated)?;
-    *items = updated;
-
-    Ok(())
-}
-
-pub fn set_homework_text(items: &mut Vec<Lesson>, index: usize, value: &str) -> Result<(), String> {
-    let value = value.trim();
-
-    if value.is_empty() {
-        return Err("Напишите домашнее задание".to_string());
+    pub fn delete_lesson(&self, index: usize) -> Result<(), String> {
+        if index >= self.borrow().len() {
+            return Err("Урок уже удалён".to_string());
+        }
+        let mut updated = self.borrow().clone();
+        updated.remove(index);
+        self.replace(updated)
     }
 
-    let mut updated = items.clone();
-    let lesson = updated.get_mut(index).ok_or("Урок не найден")?;
+    pub fn set_homework_completed(&self, index: usize, completed: bool) -> Result<(), String> {
+        let mut updated = self.borrow().clone();
 
-    if lesson.homework != value {
+        let lesson = updated.get_mut(index).ok_or("Урок не найден")?;
+
+        if lesson.homework.trim().is_empty() {
+            return Err("У этого урока нет домашнего задания".to_string());
+        }
+
+        lesson.homework_completed = completed;
+
+        self.replace(updated)
+    }
+
+    pub fn set_homework_text(&self, index: usize, value: &str) -> Result<(), String> {
+        let value = value.trim();
+
+        if value.is_empty() {
+            return Err("Напишите домашнее задание".to_string());
+        }
+
+        let mut updated = self.borrow().clone();
+        let lesson = updated.get_mut(index).ok_or("Урок не найден")?;
+
+        if lesson.homework != value {
+            lesson.homework_completed = false;
+        }
+
+        lesson.homework = value.to_string();
+        validate_lesson(lesson)?;
+
+        self.replace(updated)
+    }
+
+    pub fn delete_homework(&self, index: usize) -> Result<(), String> {
+        let mut updated = self.borrow().clone();
+        let lesson = updated.get_mut(index).ok_or("Урок не найден")?;
+        lesson.homework.clear();
         lesson.homework_completed = false;
+        self.replace(updated)
     }
-
-    lesson.homework = value.to_string();
-    validate_lesson(lesson)?;
-
-    save_lessons(&updated)?;
-    *items = updated;
-
-    Ok(())
-}
-
-pub fn delete_homework(items: &mut Vec<Lesson>, index: usize) -> Result<(), String> {
-    let mut updated = items.clone();
-    let lesson = updated.get_mut(index).ok_or("Урок не найден")?;
-    lesson.homework.clear();
-    lesson.homework_completed = false;
-    save_lessons(&updated)?;
-    *items = updated;
-    Ok(())
 }
 
 #[cfg(test)]

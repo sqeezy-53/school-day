@@ -4,7 +4,8 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use crate::bells::BellSchedule;
-use crate::{column, field, notify, page, primary, text};
+use crate::tutorial::Anchor;
+use crate::{column, field, notify, primary, text};
 
 #[derive(Clone, Copy, Default, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -146,7 +147,19 @@ pub fn settings_page(status: &gtk::Label, brand: &gtk::Label) -> gtk::Box {
 }
 
 fn settings_form(status: &gtk::Label, brand: &gtk::Label, container: &gtk::Box) -> gtk::Box {
-    let page = page("Настройки");
+    let page = column(24);
+    let heading = gtk::Box::new(gtk::Orientation::Horizontal, 12);
+    let title = text("Настройки", "title");
+    title.set_hexpand(true);
+    heading.append(&title);
+    let tutorial = gtk::Button::from_icon_name("help-browser-symbolic");
+    tutorial.add_css_class("flat");
+    tutorial.add_css_class("circular");
+    tutorial.set_valign(gtk::Align::Center);
+    tutorial.set_tooltip_text(Some("Пройти обучение снова"));
+    tutorial.set_action_name(Some("win.tutorial"));
+    heading.append(&tutorial);
+    page.append(&heading);
 
     let loaded = match load_settings() {
         Ok(settings) => settings,
@@ -199,6 +212,7 @@ fn settings_form(status: &gtk::Label, brand: &gtk::Label, container: &gtk::Box) 
     page.append(&text("Тема", "section"));
 
     let theme = gtk::DropDown::from_strings(&["Светлая", "Тёмная", "Авто"]);
+    Anchor::Theme.mark(&theme);
 
     theme.set_selected(match loaded.theme {
         Theme::Light => 0,

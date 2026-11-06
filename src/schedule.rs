@@ -4,7 +4,8 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use crate::bells::Bell;
-use crate::lessons::{Lesson, Lessons, delete_lesson, parse_lesson, store_lesson};
+use crate::lessons::{Lesson, Lessons, parse_lesson};
+use crate::tutorial::Anchor;
 
 use crate::{column, empty_state, field, margins, notify, page, primary, text};
 
@@ -12,6 +13,7 @@ pub fn schedule_page(status: &gtk::Label, lessons: Lessons) -> gtk::Box {
     let page = page("Расписание");
     let calendar = gtk::Calendar::new();
     let date = date_button(&calendar);
+    Anchor::Date.mark(&date);
     let list = column(0);
     render_lessons(&list, &lessons, &calendar, status);
 
@@ -35,6 +37,7 @@ pub fn schedule_page(status: &gtk::Label, lessons: Lessons) -> gtk::Box {
         }
     }
     let today = gtk::Button::with_label("Сегодня");
+    Anchor::Today.mark(&today);
     today.add_css_class("flat");
     let calendar_for_today = calendar.clone();
     today.connect_clicked(move |_| {
@@ -47,8 +50,9 @@ pub fn schedule_page(status: &gtk::Label, lessons: Lessons) -> gtk::Box {
     spacer.set_hexpand(true);
     toolbar.append(&spacer);
     let add = primary("Добавить урок");
+    Anchor::AddLesson.mark(&add);
     let (items, calendar_for_add, status_for_add, weak_list) = (
-        Rc::clone(&lessons),
+        lessons.clone(),
         calendar.clone(),
         status.clone(),
         list.downgrade(),
@@ -64,7 +68,7 @@ pub fn schedule_page(status: &gtk::Label, lessons: Lessons) -> gtk::Box {
 
     let weak_list = list.downgrade();
     let status = status.clone();
-    let items_for_map = Rc::clone(&lessons);
+    let items_for_map = lessons.clone();
     let calendar_for_map = calendar.clone();
     let status_for_map = status.clone();
     let list_for_map = list.downgrade();
@@ -183,8 +187,11 @@ fn render_lessons(
             button.add_css_class("flat");
             button.set_tooltip_text(Some(label));
             button.set_valign(gtk::Align::Center);
+            if editing {
+                Anchor::EditLesson.mark(&button);
+            }
             let (items, calendar, status, weak_list) = (
-                Rc::clone(lessons),
+                lessons.clone(),
                 calendar.clone(),
                 status.clone(),
                 list.downgrade(),
@@ -196,7 +203,7 @@ fn render_lessons(
                 if editing {
                     on_add_lesson(&status, &items, &list, &calendar, Some(index));
                 } else {
-                    let items = Rc::clone(&items);
+                    let items = items.clone();
                     let calendar = calendar.clone();
                     let feedback = status.clone();
                     crate::confirm_delete(
@@ -204,7 +211,7 @@ fn render_lessons(
                         "Удалить урок?",
                         "Урок и его домашнее задание будут удалены.",
                         move || {
-                            let result = delete_lesson(&mut items.borrow_mut(), index);
+                            let result = items.delete_lesson(index);
                             match result {
                                 Ok(()) => {
                                     render_lessons(&list, &items, &calendar, &feedback);
@@ -422,6 +429,12 @@ fn on_add_lesson(
     root.append(&header);
     let form = column(12);
     margins(&form, 24);
+    if lessons.is_practice() {
+        form.append(&text(
+            "Учебный урок исчезнет после выхода из обучения.",
+            "muted",
+        ));
+    }
     let title = field(&form, "Предмет", "Например, алгебра");
     let suggestions = gtk::ListBox::new();
     suggestions.set_selection_mode(gtk::SelectionMode::Single);
@@ -599,7 +612,7 @@ fn on_add_lesson(
     {
         let (feedback, items, number, start, end, duration, syncing, bells) = (
             feedback.clone(),
-            Rc::clone(lessons),
+            lessons.clone(),
             number.clone(),
             start_picker.clone(),
             end_picker.clone(),
@@ -681,7 +694,7 @@ fn on_add_lesson(
     });
     window.add_controller(escape);
     let (items, calendar, status, weak_list, weak_window) = (
-        Rc::clone(lessons),
+        lessons.clone(),
         calendar.clone(),
         status.clone(),
         list.downgrade(),
@@ -729,7 +742,7 @@ fn on_add_lesson(
                 lesson.homework_completed =
                     previous.homework_completed && previous.homework == lesson.homework;
             }
-            store_lesson(&mut items.borrow_mut(), lesson, index)
+            items.store_lesson(lesson, index)
         });
 
         match result {

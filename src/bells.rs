@@ -228,7 +228,10 @@ pub fn editor(
     let root = column(16);
     root.set_widget_name("bell-settings");
     root.add_css_class("settings-section");
-    root.append(&text("Звонки", "settings-title"));
+    let title = text("Звонки", "settings-title");
+    title.set_halign(gtk::Align::Start);
+    crate::tutorial::Anchor::Bells.mark(&title);
+    root.append(&title);
     let controls = gtk::Box::new(gtk::Orientation::Horizontal, 20);
     let length_group = column(8);
     length_group.set_hexpand(true);
