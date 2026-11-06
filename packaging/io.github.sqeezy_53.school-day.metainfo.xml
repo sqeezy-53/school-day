@@ -27,6 +27,12 @@
   </categories>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.3.0" date="2026-11-06">
+      <description>
+        <p>Interactive tutorial, an adaptive layout for narrow windows, and fixes for scheduling, settings and the Windows uninstaller.</p>
+        <p xml:lang="ru">Интерактивное обучение, адаптация интерфейса к узким окнам и исправления в расписании, настройках и деинсталляторе Windows.</p>
+      </description>
+    </release>
     <release version="0.2.0" date="2026-11-05">
       <description>
         <p>Subject suggestions with keyboard selection, deletion confirmation, and fixes for saving data, themes and long text.</p>
