@@ -26,6 +26,13 @@ flatpak install --user ./school-day-0.4.0-x86_64.flatpak
 flatpak run io.github.sqeezy_53.school-day
 ```
 
+## Участие в проекте
+
+Нашли ошибку или хотите предложить улучшение?
+Создайте [Issue](https://github.com/sqeezy-53/school-day/issues).
+
+Хотите помочь с разработкой? Отправьте Pull Request.
+
 ### Лицензия
 
 Проект распространяется по лицензии GPL-3.0.
