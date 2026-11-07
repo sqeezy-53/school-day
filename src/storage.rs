@@ -9,8 +9,6 @@ pub fn data_dir() -> PathBuf {
     gtk::glib::user_data_dir().join("school-day")
 }
 
-// GApplication объединяет запуски только внутри одного сеанса D-Bus.
-// Блокировка каталога также защищает от второго сеанса и отдельной копии программы.
 pub fn lock_data() -> Result<File, String> {
     lock_directory(&data_dir())
 }
@@ -26,17 +24,17 @@ fn lock_directory(directory: &Path) -> Result<File, String> {
     }
     let file = options
         .open(directory.join(".school-day.lock"))
-        .map_err(|error| format!("Не удалось открыть каталог данных: {error}"))?;
+        .map_err(|error| format!("Ошибка доступа к данным: {error}"))?;
     require_regular_file(&file.metadata().map_err(|error| error.to_string())?)
         .map_err(|error| error.to_string())?;
     match file.try_lock() {
         Ok(()) => Ok(file),
         Err(TryLockError::WouldBlock) => Err(
-            "Эти данные уже открыты в другом экземпляре приложения. Закройте его и повторите запуск."
+            "Приложение уже запущено. Закройте другое окно и попробуйте снова."
                 .into(),
         ),
         Err(TryLockError::Error(error)) => {
-            Err(format!("Не удалось защитить данные от одновременной записи: {error}"))
+            Err(format!("Ошибка блокировки данных: {error}"))
         }
     }
 }
@@ -55,8 +53,6 @@ where
         Err(error) => return Err(format!("{}: {error}", target.display())),
     }
 
-    // Старые версии хранили данные рядом с проектом. Исходные файлы оставляем.
-    // В Flatpak данные из домашней папки не читаются: доступен только свой каталог.
     if std::env::var_os("FLATPAK_ID").is_some() {
         return Ok(None);
     }
@@ -191,7 +187,7 @@ fn write_json(directory: &Path, name: &str, json: &[u8]) -> std::io::Result<()> 
         use std::os::unix::fs::OpenOptionsExt;
         options.mode(0o600);
     }
-    // create_new не открывает существующий файл или символическую ссылку.
+ 
     let mut file = options.open(&temporary)?;
     let result = (|| {
         file.write_all(json)?;
@@ -204,8 +200,6 @@ fn write_json(directory: &Path, name: &str, json: &[u8]) -> std::io::Result<()> 
     }
     #[cfg(unix)]
     if result.is_ok() {
-        // После успешного rename данные уже изменены. Ошибка fsync каталога
-        // не должна приводить к расхождению между экраном и записанным файлом.
         let _ = File::open(directory).and_then(|directory| directory.sync_all());
     }
     result

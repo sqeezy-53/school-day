@@ -1,6 +1,5 @@
 use std::os::windows::process::CommandExt;
 
-// Установщик проверяет этот объект перед заменой или удалением файлов программы.
 pub fn running_guard() -> Result<std::os::windows::io::OwnedHandle, String> {
     use std::os::windows::io::FromRawHandle;
     #[link(name = "kernel32")]
@@ -30,7 +29,7 @@ pub fn running_guard() -> Result<std::os::windows::io::OwnedHandle, String> {
         .encode_utf16()
         .chain(Some(0))
         .collect();
-    // Имя завершается нулём; дескриптор закрывается при завершении приложения.
+
     let handle = unsafe { CreateMutexW(std::ptr::null_mut(), 0, name.as_ptr()) };
     if handle.is_null() {
         return Err(std::io::Error::last_os_error().to_string());
@@ -40,7 +39,7 @@ pub fn running_guard() -> Result<std::os::windows::io::OwnedHandle, String> {
     Ok(guard)
 }
 
-// SVG-модулю нужны пути текущей установки, в том числе с пробелами и кириллицей.
+
 pub fn prepare_runtime() -> Result<(), String> {
     let executable = std::env::current_exe().map_err(|error| error.to_string())?;
     let prefix = executable
@@ -48,7 +47,7 @@ pub fn prepare_runtime() -> Result<(), String> {
         .and_then(|path| path.parent())
         .ok_or("Не найдена папка приложения")?;
     let query = prefix.join("bin/gdk-pixbuf-query-loaders.exe");
-    // При запуске из Cargo библиотеки настраивает среда разработчика.
+
     if !query.is_file() {
         return Ok(());
     }
@@ -61,13 +60,10 @@ pub fn prepare_runtime() -> Result<(), String> {
         .collect::<Vec<_>>();
     loaders.sort();
     let output = std::process::Command::new(query)
-        // У C-утилиты argv зависит от кодовой страницы. Имена DLL содержат ASCII,
-        // а полный путь рабочей папки Windows получает через Unicode API.
         .current_dir(&modules)
         .args(&loaders)
-        // Отладочные сообщения GLib идут в stdout и не должны попадать в кэш.
         .env_remove("G_MESSAGES_DEBUG")
-        .creation_flags(0x0800_0000) // CREATE_NO_WINDOW
+        .creation_flags(0x0800_0000)
         .output()
         .map_err(|error| format!("Не удалось подключить значки: {error}"))?;
     let cache = String::from_utf8_lossy(&output.stdout);
@@ -96,7 +92,6 @@ pub fn show_error(message: &str) {
     }
     let message: Vec<u16> = message.encode_utf16().chain(Some(0)).collect();
     let title: Vec<u16> = "Школьный день".encode_utf16().chain(Some(0)).collect();
-    // Обе строки завершаются нулём и живут до возврата синхронного MessageBoxW.
     unsafe {
         MessageBoxW(std::ptr::null_mut(), message.as_ptr(), title.as_ptr(), 0x10);
     }

@@ -142,7 +142,7 @@ pub fn schedule_page(status: &gtk::Label, lessons: Lessons, undo: Option<&UndoHa
 fn selected_date(calendar: &gtk::Calendar) -> NaiveDate {
     let date = calendar.date();
     NaiveDate::from_ymd_opt(date.year(), date.month() as u32, date.day_of_month() as u32)
-        .expect("GTK Calendar возвращает существующую дату")
+        .expect("Не удалось получить выбранную дату")
 }
 
 fn select_date(calendar: &gtk::Calendar, date: NaiveDate) {
@@ -415,7 +415,7 @@ impl TimePicker {
             self.minute.value_as_int() as u32,
             0,
         )
-        .expect("Диапазоны переключателей ограничены временем суток")
+        .expect("Указаны неверные часы или минуты")
     }
 
     fn set_time(&self, time: NaiveTime) {
@@ -670,7 +670,6 @@ fn on_add_lesson(
             }
         });
     }
-    // Выбранный звонок подставляет оба времени. Ручная правка становится своим временем.
     for spin in [&start_picker.hour, &start_picker.minute] {
         let (hour, minute, end, duration, syncing, number, automatic) = (
             start_picker.hour.downgrade(),
@@ -832,7 +831,6 @@ fn on_add_lesson(
     feedback.set_lines(3);
     feedback.set_ellipsize(gtk::pango::EllipsizeMode::End);
     root.append(&feedback);
-    // Действия остаются видимыми даже в небольшом окне с прокруткой.
     root.append(&actions);
     let window = adw::Window::builder()
         .title(heading)

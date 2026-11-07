@@ -204,13 +204,13 @@ fn validate_lesson(lesson: &Lesson) -> Result<(), String> {
         .iter()
         .any(|text| text.contains('\0'))
     {
-        return Err("В данных урока есть недопустимый нулевой символ".to_string());
+        return Err("Недопустимые символы в данных урока".to_string());
     }
     if lesson.title.trim().is_empty() || lesson.room.trim().is_empty() {
-        return Err("У урока должны быть предмет и кабинет".to_string());
+        return Err("Укажите предмет и кабинет".to_string());
     }
     if lesson.end <= lesson.time {
-        return Err("Конец урока должен быть позже начала в тот же день".to_string());
+        return Err("Время окончания должно быть позже начала".to_string());
     }
     Ok(())
 }
@@ -264,10 +264,10 @@ fn validate_saved(saved: &mut SavedData) -> Result<(), String> {
 
 fn validate_pending(title: &str, body: &str) -> Result<(), String> {
     if title.trim().is_empty() || body.trim().is_empty() {
-        return Err("У задания должны быть предмет и текст".into());
+        return Err("Укажите предмет и текст задания".into());
     }
     if title.contains('\0') || body.contains('\0') {
-        return Err("В данных задания есть недопустимый нулевой символ".into());
+        return Err("Недопустимые символы в задании".into());
     }
     Ok(())
 }

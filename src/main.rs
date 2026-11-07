@@ -64,7 +64,6 @@ fn main() -> gtk::glib::ExitCode {
     gtk::glib::set_application_name("Школьный день");
     let app = adw::Application::builder().application_id(APP_ID).build();
     app.connect_activate(|app| {
-        // Повторный запуск показывает существующее окно с теми же настройками.
         if let Some(window) = app.active_window() {
             window.present();
         } else {
@@ -158,7 +157,6 @@ fn build_window(app: &adw::Application) {
     status.set_visible(false);
     let undo = undo::UndoBar::new(&status);
     let undo_handle = undo.handle();
-    // Обе вкладки получают ссылки на один список уроков и домашних заданий.
     let lessons_loaded = match lessons::load_lessons() {
         Ok(loaded) => {
             let items = lessons::Lessons::new(loaded);
@@ -173,7 +171,6 @@ fn build_window(app: &adw::Application) {
             true
         }
         Err(error) => {
-            // При ошибке загрузки не создаём пустой список для записи поверх файла.
             for (name, title) in [("schedule", "Расписание"), ("homework", "ДЗ")] {
                 let content = page(title);
                 content.append(&text(
@@ -219,7 +216,6 @@ fn build_window(app: &adw::Application) {
             button.set_active(true);
             first = Some(button.clone());
         }
-        // clone создаёт ещё одну ссылку на объект GTK; move сохраняет её в обработчике.
         let (pages, status) = (pages.clone(), status.clone());
         button.connect_toggled(move |button| {
             if button.is_active() {

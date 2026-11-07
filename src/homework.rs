@@ -279,7 +279,7 @@ impl HomeworkList {
             }
         }
         if choices.is_empty() {
-            notify(&self.status, "Сначала добавьте учебный урок в расписании.");
+            notify(&self.status, "Сначала добавьте урок в расписании.");
             return;
         }
         let labels: Vec<_> = choices.iter().map(|(_, label)| label.as_str()).collect();

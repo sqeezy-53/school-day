@@ -62,10 +62,10 @@ impl Settings {
 
 fn validate(settings: &Settings) -> Result<(), String> {
     if settings.class.contains('\0') {
-        return Err("В названии класса есть недопустимый нулевой символ".to_string());
+        return Err("Недопустимые символы в названии класса".to_string());
     }
     if settings.theme == Theme::Auto && settings.light_from == settings.dark_from {
-        return Err("Время включения тем должно различаться".to_string());
+        return Err("Укажите разное время для светлой и тёмной темы".to_string());
     }
 
     settings.bells.slots()?;
@@ -188,7 +188,7 @@ fn settings_form(status: &gtk::Label, brand: &gtk::Label, container: &gtk::Box) 
                             || "Настройки восстановлены".to_string(),
                             |path| {
                                 format!(
-                                    "Настройки восстановлены. Копия прежних настроек: {}",
+                                    "Настройки сброшены. Резервная копия: {}",
                                     path.display()
                                 )
                             },
@@ -294,7 +294,6 @@ fn settings_form(status: &gtk::Label, brand: &gtk::Label, container: &gtk::Box) 
             return;
         };
 
-        // Применяем набранный текст, защищаясь от повторных сигналов.
         updating.set(true);
 
         for spin in &times {

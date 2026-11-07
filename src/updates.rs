@@ -328,7 +328,7 @@ impl UpdateView {
     }
 
     fn show_release(&self, release: Release) {
-        let current = Version::parse(VERSION).expect("Версия приложения соответствует SemVer");
+        let current = Version::parse(VERSION).expect("Некорректная версия приложения");
         let Ok(version) = release.version() else {
             self.message("Не удалось прочитать версию обновления.");
             return;

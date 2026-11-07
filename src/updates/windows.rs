@@ -31,7 +31,7 @@ impl Release {
             self.tag_name
         );
         if asset.browser_download_url != url {
-            return Err("Неверный адрес установщика".into());
+            return Err("Неверный адрес".into());
         }
         DownloadSpec::from_asset(asset)
     }
@@ -44,7 +44,7 @@ impl DownloadSpec {
             .as_deref()
             .and_then(|digest| digest.strip_prefix("sha256:"))
             .filter(|hash| hash.len() == 64 && hash.bytes().all(|value| value.is_ascii_hexdigit()))
-            .ok_or("Для установщика не опубликована контрольная сумма SHA-256")?;
+            .ok_or("Не удалось проверить целостность установщика")?;
         if asset.size == 0 || asset.size > MAX_INSTALLER {
             return Err("Неверный размер установщика".into());
         }
@@ -158,7 +158,7 @@ fn copy_verified(
         return Err("Установщик загружен не полностью".into());
     }
     if format!("{:x}", hash.finalize()) != spec.sha256 {
-        return Err("Контрольная сумма установщика не совпала. Повторите загрузку.".into());
+        return Err("Установщик повреждён или изменён. Попробуйте скачать его заново.".into());
     }
     progress(received)
 }
