@@ -25,6 +25,7 @@ pub struct Settings {
     pub light_from: NaiveTime,
     pub dark_from: NaiveTime,
     pub bells: BellSchedule,
+    pub check_updates: bool,
 }
 
 impl Default for Settings {
@@ -35,6 +36,7 @@ impl Default for Settings {
             light_from: NaiveTime::from_hms_opt(7, 0, 0).unwrap(),
             dark_from: NaiveTime::from_hms_opt(20, 0, 0).unwrap(),
             bells: BellSchedule::default(),
+            check_updates: false,
         }
     }
 }
@@ -338,6 +340,7 @@ fn settings_form(status: &gtk::Label, brand: &gtk::Label, container: &gtk::Box) 
             .unwrap(),
 
             bells: saved.borrow().bells.clone(),
+            check_updates: saved.borrow().check_updates,
         };
 
         automatic.set_visible(candidate.theme == Theme::Auto);
@@ -385,6 +388,19 @@ fn settings_form(status: &gtk::Label, brand: &gtk::Label, container: &gtk::Box) 
         }
         Ok(())
     }));
+
+    let automatic_updates = current.borrow().check_updates;
+    let update_settings = Rc::clone(&current);
+    page.append(&crate::updates::section(
+        automatic_updates,
+        move |enabled| {
+            let mut candidate = update_settings.borrow().clone();
+            candidate.check_updates = enabled;
+            save_settings(&candidate)?;
+            *update_settings.borrow_mut() = candidate;
+            Ok(())
+        },
+    ));
 
     let weak_brand = brand.downgrade();
 

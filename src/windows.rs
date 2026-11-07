@@ -10,7 +10,22 @@ pub fn running_guard() -> Result<std::os::windows::io::OwnedHandle, String> {
             owner: i32,
             name: *const u16,
         ) -> *mut std::ffi::c_void;
+        fn OpenMutexW(access: u32, inherit: i32, name: *const u16) -> *mut std::ffi::c_void;
     }
+    let installing: Vec<u16> = "Local\\io.github.sqeezy_53.school-day.installing"
+        .encode_utf16()
+        .chain(Some(0))
+        .collect();
+    let check_installing = || {
+        let handle = unsafe { OpenMutexW(0x100000, 0, installing.as_ptr()) };
+        if handle.is_null() {
+            Ok(())
+        } else {
+            let _guard = unsafe { std::os::windows::io::OwnedHandle::from_raw_handle(handle) };
+            Err("Выполняется установка «Школьного дня». Дождитесь её завершения и откройте приложение снова.".to_string())
+        }
+    };
+    check_installing()?;
     let name: Vec<u16> = "Local\\io.github.sqeezy_53.school-day"
         .encode_utf16()
         .chain(Some(0))
@@ -20,7 +35,9 @@ pub fn running_guard() -> Result<std::os::windows::io::OwnedHandle, String> {
     if handle.is_null() {
         return Err(std::io::Error::last_os_error().to_string());
     }
-    Ok(unsafe { std::os::windows::io::OwnedHandle::from_raw_handle(handle) })
+    let guard = unsafe { std::os::windows::io::OwnedHandle::from_raw_handle(handle) };
+    check_installing()?;
+    Ok(guard)
 }
 
 // SVG-модулю нужны пути текущей установки, в том числе с пробелами и кириллицей.

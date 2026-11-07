@@ -9,6 +9,7 @@ mod settings;
 mod storage;
 mod tutorial;
 mod undo;
+mod updates;
 #[cfg(target_os = "windows")]
 mod windows;
 
@@ -70,7 +71,17 @@ fn main() -> gtk::glib::ExitCode {
             build_window(app);
         }
     });
-    app.run()
+    let result = app.run();
+    #[cfg(windows)]
+    {
+        drop(app);
+        drop(_running);
+        if let Err(error) = updates::install_pending() {
+            windows::show_error(&error);
+            return gtk::glib::ExitCode::FAILURE;
+        }
+    }
+    result
 }
 
 fn build_window(app: &adw::Application) {
@@ -257,7 +268,7 @@ fn build_window(app: &adw::Application) {
         .application(app)
         .title("Школьный день")
         .default_width(1040)
-        .default_height(740)
+        .default_height(700)
         .width_request(360)
         .height_request(320)
         .content(&overlay)

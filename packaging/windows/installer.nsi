@@ -2,8 +2,9 @@ Unicode true
 !include "MUI2.nsh"
 !include "x64.nsh"
 !include "WinVer.nsh"
+!include "FileFunc.nsh"
 !ifndef APP_VERSION
-!define APP_VERSION "0.3.0"
+!define APP_VERSION "0.4.0"
 !endif
 !ifndef PAYLOAD
 !error "Specify PAYLOAD"
@@ -43,6 +44,18 @@ VIAddVersionKey /LANG=1049 "FileDescription" "Установка приложе�
 VIAddVersionKey /LANG=1049 "FileVersion" "${APP_VERSION}"
 VIAddVersionKey /LANG=1049 "LegalCopyright" "sqeezy-53"
 
+!macro LOCK_INSTALLATION
+  System::Call 'kernel32::CreateMutexW(p 0, i 0, w "Local\io.github.sqeezy_53.school-day.installing") p .r0 ?e'
+  Pop $1
+  ${If} $0 == 0
+  ${OrIf} $1 == 183
+    IfSilent +2
+    MessageBox MB_ICONSTOP "Другая установка уже выполняется. Дождитесь её завершения."
+    SetErrorLevel 2
+    Abort
+  ${EndIf}
+!macroend
+
 !macro CHECK_RUNNING
 check_running:
   System::Call 'kernel32::OpenMutexW(i 0x100000, i 0, w "Local\io.github.sqeezy_53.school-day") p .r0'
@@ -67,6 +80,7 @@ not_running:
 !macroend
 
 Function .onInit
+  !insertmacro LOCK_INSTALLATION
   !insertmacro CHECK_RUNNING
   ${IfNot} ${AtLeastWin10}
     MessageBox MB_ICONSTOP "Нужна Windows 10 или новее."
@@ -76,9 +90,24 @@ Function .onInit
     MessageBox MB_ICONSTOP "Нужна 64-битная Windows."
     Abort
   ${EndIf}
+  ${GetParameters} $R0
+  ClearErrors
+  ${GetOptions} $R0 "/UPDATE" $R1
+  ${IfNot} ${Errors}
+    ReadRegStr $INSTDIR HKCU "Software\SchoolDay" "InstallDir"
+    ${IfNot} ${FileExists} "$INSTDIR\Uninstall.exe"
+      SetErrorLevel 2
+      Abort
+    ${EndIf}
+    ${IfNot} ${FileExists} "$INSTDIR\bin\school-day.exe"
+      SetErrorLevel 2
+      Abort
+    ${EndIf}
+  ${EndIf}
 FunctionEnd
 
 Function un.onInit
+  !insertmacro LOCK_INSTALLATION
   !insertmacro CHECK_RUNNING
 FunctionEnd
 

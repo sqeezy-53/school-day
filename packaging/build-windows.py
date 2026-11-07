@@ -141,7 +141,7 @@ def build(args, downloads, stage, output):
         "CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER": "x86_64-w64-mingw32-gcc",
     })
     build_zlib(stage, downloads, env)
-    run(["cargo", "build", "--release", "--locked", "--target", "x86_64-pc-windows-gnu"], cwd=PROJECT, env=env)
+    run(["cargo", "build", "--release", "--locked", "--features", "windows-updater", "--target", "x86_64-pc-windows-gnu"], cwd=PROJECT, env=env)
     version = tomllib.loads((PROJECT / "Cargo.toml").read_text())["package"]["version"]
     payload = stage / "payload"
     (payload / "bin").mkdir(parents=True)
@@ -151,7 +151,10 @@ def build(args, downloads, stage, output):
 
     # Замыкаем импорты PE: системные DLL Windows не копируем из среды сборки.
     available = {path.name.lower(): path for path in (prefix / "bin").glob("*.dll")}
-    queue = [executable]
+    updater = payload / "bin/school-day-updater.exe"
+    shutil.copy2(stage / "target/x86_64-pc-windows-gnu/release/school-day-updater.exe", updater)
+    run([str(args.cross_bin / "x86_64-w64-mingw32-strip"), str(updater)])
+    queue = [executable, updater]
     query = prefix / "bin/gdk-pixbuf-query-loaders.exe"
     shutil.copy2(query, payload / "bin" / query.name)
     queue.append(payload / "bin" / query.name)
