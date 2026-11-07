@@ -27,6 +27,12 @@
   </categories>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.4.0" date="2026-11-07">
+      <description>
+        <p>Homework before lessons, completed task groups, undo deletion, keyboard navigation and update checks.</p>
+        <p xml:lang="ru">ДЗ заранее, раздел выполненных заданий, отмена удаления, управление с клавиатуры и проверка обновлений.</p>
+      </description>
+    </release>
     <release version="0.3.0" date="2026-11-06">
       <description>
         <p>Interactive tutorial, an adaptive layout for narrow windows, and fixes for scheduling, settings and the Windows uninstaller.</p>
