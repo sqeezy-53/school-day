@@ -6,6 +6,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-24.04
+    container: debian:trixie
     steps:
       - name: Получить исходники
         uses: actions/checkout@v7
@@ -14,8 +15,11 @@ jobs:
 
       - name: Установить компоненты
         run: |
-          sudo apt-get update
-          sudo apt-get install -y mingw-w64 nsis libarchive-tools make pkg-config libglib2.0-bin
+          apt-get update
+          apt-get install -y ca-certificates curl git python3 make libarchive-tools pkg-config libglib2.0-bin nsis gcc-mingw-w64-ucrt64 g++-mingw-w64-ucrt64
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
+          export PATH="$HOME/.cargo/bin:$PATH"
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
           rustup target add x86_64-pc-windows-gnu
 
       - name: Проверить все ли установлено
@@ -23,8 +27,8 @@ jobs:
           rustc --version
           cargo --version
           rustup target list --installed
-          command -v x86_64-w64-mingw32-gcc
-          command -v makensis
+          command -v x86_64-w64-mingw32ucrt-gcc
+          x86_64-w64-mingw32ucrt-gcc --version
 
       - name: Собрать под винду
         run: |
