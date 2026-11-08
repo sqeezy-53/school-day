@@ -16,7 +16,7 @@ jobs:
       - name: Установить компоненты
         run: |
           apt-get update
-          apt-get install -y ca-certificates curl git python3 make libarchive-tools pkg-config libglib2.0-bin nsis gcc-mingw-w64-ucrt64 g++-mingw-w64-ucrt64 binutils-mingw-w64-ucrt64
+          apt-get install -y ca-certificates curl git python3 make libarchive-tools pkg-config libglib2.0-bin nsis gcc-mingw-w64-ucrt64 g++-mingw-w64-ucrt64 binutils-mingw-w64-ucrt64 build-essential
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
           export PATH="$HOME/.cargo/bin:$PATH"
           echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
@@ -29,6 +29,8 @@ jobs:
           rustup target list --installed
           command -v x86_64-w64-mingw32ucrt-gcc
           x86_64-w64-mingw32ucrt-gcc --version
+          command -v cc
+          cc --version
 
       - name: Собрать под винду
         run: |
