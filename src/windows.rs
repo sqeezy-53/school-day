@@ -31,14 +31,19 @@ pub fn running_guard() -> Result<std::os::windows::io::OwnedHandle, String> {
         .collect();
 
     let handle = unsafe { CreateMutexW(std::ptr::null_mut(), 0, name.as_ptr()) };
+
+    let os_error = std::io::Error::last_os_error();
     if handle.is_null() {
-        return Err(std::io::Error::last_os_error().to_string());
+        return Err(os_error.to_string());
     }
     let guard = unsafe { std::os::windows::io::OwnedHandle::from_raw_handle(handle) };
+
+    if os_error.raw_os_error() == Some(183) {
+        return Err("Школьный день уже запущен".to_string());
+    }
     check_installing()?;
     Ok(guard)
 }
-
 
 pub fn prepare_runtime() -> Result<(), String> {
     let executable = std::env::current_exe().map_err(|error| error.to_string())?;
