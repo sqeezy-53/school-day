@@ -31,8 +31,11 @@ jobs:
           x86_64-w64-mingw32ucrt-gcc --version
           command -v cc
           cc --version
+          command -v x86_64-w64-mingw32ucrt-dlltool
 
       - name: Собрать под винду
+        env:
+          CARGO_TARGET_X86_64_PC_WINDOWS_GNU_RUSTFLAGS: "-C dlltool=/usr/bin/x86_64-w64-mingw32ucrt-dlltool"
         run: |
           python3 packaging/build-windows.py \
           --work-dir "$RUNNER_TEMP/school-day-build" \
