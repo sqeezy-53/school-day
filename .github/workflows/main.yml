@@ -8,6 +8,31 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Получить исходники
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Показать файлы
         run: ls -la
+
+      - name: Установить компоненты
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mingw-w64 nsis libarchive-tools make pkg-config libglib2.0-bin
+          rustup target add x86_64-pc-windows-gnu
+
+      - name: Проверить все ли установлено
+        run: |
+          rustc --version
+          cargo --version
+          rustup target list --installed
+          command -v x86_64-w64-mingw32-gcc
+          command -v makensis
+
+      - name: Собрать под винду
+        run: |
+          python3 packaging/build-windows.py \
+          --work-dir "$RUNNER_TEMP/school-day-build" \
+          --output-dir "$GITHUB_WORKSPACE/artifacts" \
+          --cross-bin /usr/bin \
+          --makensis /usr/bin/makensis \
+          --nsis-dir /usr/share/nsis
+
+        
