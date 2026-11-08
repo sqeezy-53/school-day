@@ -53,19 +53,22 @@ def fetch(url, target, expected):
     return target
 
 
-def build_zlib(stage, downloads, env):
+def build_zlib(stage, downloads, env, cross_prefix):
     url = ZLIB["source_url"]
     archive = fetch(url, downloads / url.rsplit("/", 1)[1], ZLIB["source_sha256"])
     run(["bsdtar", "-xf", str(archive), "-C", str(stage)])
     source = stage / f"zlib-{ZLIB['version']}"
-    run(["make", "-f", "win32/Makefile.gcc", "-j2", "PREFIX=x86_64-w64-mingw32-",
-         "LOC=-mcrtdll=ucrt", "SHARED_MODE=1", f"DESTDIR={stage / 'gtk'}",
+        loc = "" if cross_prefix.endswith("ucrt-") else "-mcrtdll=ucrt"
+    run(["make", "-f", "win32/Makefile.gcc", "-j2", f"PREFIX={cross_prefix}",
+         f"LOC={loc}", "SHARED_MODE=1", f"DESTDIR={stage / 'gtk'}",
          "prefix=/ucrt64", "BINARY_PATH=/ucrt64/bin", "LIBRARY_PATH=/ucrt64/lib",
          "INCLUDE_PATH=/ucrt64/include", "install"], cwd=source, env=env)
     license_path = stage / "gtk/ucrt64/share/licenses/zlib"
     license_path.mkdir(parents=True)
     shutil.copy2(source / "LICENSE", license_path / "LICENSE")
 
+def build_zlib(stage, downloads, env, args.cross_prefix):
+    loc = "" if cross_prefix.endswith("ucrt-") else "-mcrtdll=ucrt"
 
 def write_installer_inventory(payload, destination, loaders_cache):
     def installed_path(path):
@@ -92,6 +95,7 @@ def write_installer_inventory(payload, destination, loaders_cache):
         for macro, lines in commands.items():
             output.write(f"!macro {macro}\n")
             for line in lines:
+                
                 output.write(f"  {line}\n")
             output.write("!macroend\n")
 
@@ -101,6 +105,7 @@ def main():
     parser.add_argument("--work-dir", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--cross-bin", type=Path, required=True)
+    parser.add_argument("--cross-prefix", default="x86_64-w64-mingw32-")
     parser.add_argument("--makensis", type=Path, required=True)
     parser.add_argument("--nsis-dir", type=Path)
     args = parser.parse_args()
@@ -138,22 +143,23 @@ def build(args, downloads, stage, output):
         "PKG_CONFIG_ALLOW_CROSS": "1",
         "PKG_CONFIG_SYSROOT_DIR": str(gtk),
         "PKG_CONFIG_LIBDIR": str(prefix / "lib/pkgconfig"),
-        "CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER": "x86_64-w64-mingw32-gcc",
+        "CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER": f"{args.cross_prefix}gcc",
+        "WINDRES": f"{args.cross_prefix}windres",
     })
-    build_zlib(stage, downloads, env)
+    build_zlib(stage, downloads, env, args.cross_prefix)
     run(["cargo", "build", "--release", "--locked", "--features", "windows-updater", "--target", "x86_64-pc-windows-gnu"], cwd=PROJECT, env=env)
     version = tomllib.loads((PROJECT / "Cargo.toml").read_text())["package"]["version"]
     payload = stage / "payload"
     (payload / "bin").mkdir(parents=True)
     executable = payload / "bin/school-day.exe"
     shutil.copy2(stage / "target/x86_64-pc-windows-gnu/release/school_app_learning.exe", executable)
-    run([str(args.cross_bin / "x86_64-w64-mingw32-strip"), str(executable)])
+    run([str(args.cross_bin / f"{args.cross_prefix}strip"), str(executable)])
 
     # Замыкаем импорты PE: системные DLL Windows не копируем из среды сборки.
     available = {path.name.lower(): path for path in (prefix / "bin").glob("*.dll")}
     updater = payload / "bin/school-day-updater.exe"
     shutil.copy2(stage / "target/x86_64-pc-windows-gnu/release/school-day-updater.exe", updater)
-    run([str(args.cross_bin / "x86_64-w64-mingw32-strip"), str(updater)])
+    run([str(args.cross_bin / f"{args.cross_prefix}strip"), str(updater)])
     queue = [executable, updater]
     query = prefix / "bin/gdk-pixbuf-query-loaders.exe"
     shutil.copy2(query, payload / "bin" / query.name)
@@ -169,7 +175,7 @@ def build(args, downloads, stage, output):
     copied, system = set(), set()
     while queue:
         path = queue.pop()
-        details = subprocess.check_output([str(args.cross_bin / "x86_64-w64-mingw32-objdump"), "-p", str(path)], text=True)
+        details = subprocess.check_output([str(args.cross_bin / f"{args.cross_prefix}objdump"), "-p", str(path)], text=True)
         for name in re.findall(r"DLL Name:\s*(\S+)", details):
             key = name.lower()
             if key not in available:
