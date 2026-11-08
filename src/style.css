@@ -1,0 +1,25 @@
+window { background: @window_bg_color; color: @window_fg_color; }
+headerbar { background: @headerbar_bg_color; box-shadow: none; border-bottom: 1px solid alpha(@window_fg_color, 0.10); min-height: 48px; }
+.brand { font-size: 12px; font-weight: 600; opacity: 0.65; }
+.brand-logo { color: @headerbar_fg_color; background: alpha(@headerbar_fg_color, 0.12); border-radius: 5px; }
+.title { font-size: 23px; font-weight: 600; letter-spacing: -0.4px; }
+.muted { opacity: 0.60; }
+.section { font-size: 13px; font-weight: 500; }
+.nav { padding: 7px 12px; border-radius: 6px; color: alpha(@window_fg_color, 0.65); }
+.nav:checked { background: alpha(@window_fg_color, 0.10); color: @window_fg_color; }
+.nav:hover { background: alpha(@window_fg_color, 0.07); }
+.panel { padding: 20px 0; border-top: 1px solid alpha(@window_fg_color, 0.10); }
+.empty-icon { opacity: 0.55; }
+button { box-shadow: none; }
+button.primary { background: alpha(@window_fg_color, 0.10); color: @window_fg_color; border: 1px solid alpha(@window_fg_color, 0.18); padding: 9px 16px; border-radius: 6px; }
+button.primary:hover { background: alpha(@window_fg_color, 0.15); }
+entry { background: @view_bg_color; color: @view_fg_color; border: 1px solid alpha(@window_fg_color, 0.15); padding: 8px 10px; border-radius: 6px; }
+entry:focus-within { border-color: alpha(@window_fg_color, 0.55); }
+.form-error { color: @error_color; }
+.homework-editor { border: 1px solid alpha(@window_fg_color, 0.15); border-radius: 6px; }
+.homework-editor:focus-within { border-color: alpha(@window_fg_color, 0.55); }
+.undo-bar { padding: 8px 16px; border-top: 1px solid alpha(@window_fg_color, 0.15); background: @headerbar_bg_color; }
+.status { opacity: 0.80; padding-top: 12px; border-top: 1px solid alpha(@window_fg_color, 0.10); }
+.settings-section { padding-top: 20px; border-top: 1px solid alpha(@window_fg_color, 0.10); }
+.settings-title { font-size: 16px; font-weight: 600; }
+.bell-table { padding: 12px; background: @card_bg_color; border: 1px solid alpha(@window_fg_color, 0.10); border-radius: 10px; }
