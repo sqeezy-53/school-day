@@ -17,6 +17,8 @@
 
 ## Установка
 
+При тестировании программы на Windows 10 произошло ложное срабатывание Microsoft Defender. Установщик отправлен Microsoft на проверку.
+
 **Windows x64:** [скачать установщик](https://github.com/sqeezy-53/school-day/releases/download/v0.4.0/school-day-0.4.0-windows-x64-setup.exe).
 
 **Linux x86_64:** установите [Flatpak](https://flathub.org/en/setup) и [скачайте пакет](https://github.com/sqeezy-53/school-day/releases/download/v0.4.0/school-day-0.4.0-x86_64.flatpak).
