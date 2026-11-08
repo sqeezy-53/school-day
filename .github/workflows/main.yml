@@ -8,11 +8,6 @@ jobs:
     runs-on: ubuntu-24.04
     container: debian:trixie
     steps:
-      - name: Получить исходники
-        uses: actions/checkout@v7
-      - name: Показать файлы
-        run: ls -la
-
       - name: Установить компоненты
         run: |
           apt-get update
@@ -21,6 +16,17 @@ jobs:
           export PATH="$HOME/.cargo/bin:$PATH"
           echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
           rustup target add x86_64-pc-windows-gnu
+
+      - name: Получить исходники
+        uses: actions/checkout@v7
+
+      - name: проверка репозитория
+        run: |
+          git rev-parse --show-toplevel
+          git rev-parse --short HEAD
+
+      - name: показать файлы
+        run: ls -la
 
       - name: Проверить все ли установлено
         run: |
@@ -44,5 +50,11 @@ jobs:
           --makensis /usr/bin/makensis \
           --nsis-dir /usr/share/nsis \
           --cross-prefix x86_64-w64-mingw32ucrt-
-
+          
+      - name: Сохранить файлы сборки
+        uses: actions/upload-artifact@v7
+        with:
+          name: school-day-windows
+          path: artifacts/
+          if-no-files-found: error
         
