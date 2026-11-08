@@ -20,12 +20,13 @@ jobs:
       - name: Получить исходники
         uses: actions/checkout@v7
 
-      - name: проверка репозитория
+      - name: Проверка репозитория
         run: |
+          git config --system --add safe.directory "$GITHUB_WORKSPACE"
           git rev-parse --show-toplevel
           git rev-parse --short HEAD
 
-      - name: показать файлы
+      - name: Показать файлы
         run: ls -la
 
       - name: Проверить все ли установлено
