@@ -58,7 +58,7 @@ def build_zlib(stage, downloads, env, cross_prefix):
     archive = fetch(url, downloads / url.rsplit("/", 1)[1], ZLIB["source_sha256"])
     run(["bsdtar", "-xf", str(archive), "-C", str(stage)])
     source = stage / f"zlib-{ZLIB['version']}"
-        loc = "" if cross_prefix.endswith("ucrt-") else "-mcrtdll=ucrt"
+    loc = "" if cross_prefix.endswith("ucrt-") else "-mcrtdll=ucrt"
     run(["make", "-f", "win32/Makefile.gcc", "-j2", f"PREFIX={cross_prefix}",
          f"LOC={loc}", "SHARED_MODE=1", f"DESTDIR={stage / 'gtk'}",
          "prefix=/ucrt64", "BINARY_PATH=/ucrt64/bin", "LIBRARY_PATH=/ucrt64/lib",
@@ -66,10 +66,7 @@ def build_zlib(stage, downloads, env, cross_prefix):
     license_path = stage / "gtk/ucrt64/share/licenses/zlib"
     license_path.mkdir(parents=True)
     shutil.copy2(source / "LICENSE", license_path / "LICENSE")
-
-def build_zlib(stage, downloads, env, args.cross_prefix):
-    loc = "" if cross_prefix.endswith("ucrt-") else "-mcrtdll=ucrt"
-
+    
 def write_installer_inventory(payload, destination, loaders_cache):
     def installed_path(path):
         relative = str(path.relative_to(payload)).replace("/", "\\")
@@ -155,7 +152,6 @@ def build(args, downloads, stage, output):
     shutil.copy2(stage / "target/x86_64-pc-windows-gnu/release/school_app_learning.exe", executable)
     run([str(args.cross_bin / f"{args.cross_prefix}strip"), str(executable)])
 
-    # Замыкаем импорты PE: системные DLL Windows не копируем из среды сборки.
     available = {path.name.lower(): path for path in (prefix / "bin").glob("*.dll")}
     updater = payload / "bin/school-day-updater.exe"
     shutil.copy2(stage / "target/x86_64-pc-windows-gnu/release/school-day-updater.exe", updater)
