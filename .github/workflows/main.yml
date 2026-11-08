@@ -1,0 +1,13 @@
+name: Сборка Windows
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Получить исходники
+        uses: actions/checkout@v4
+      - name: Показать файлы
+        run: ls -la
