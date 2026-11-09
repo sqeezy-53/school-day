@@ -1,4 +1,5 @@
 use std::os::windows::process::CommandExt;
+use std::os::windows::prelude::OwnedHandle;
 
 pub fn initialize() -> Result<OwnedHandle, String> {
     let guard = running_guard()?;
