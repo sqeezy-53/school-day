@@ -23,18 +23,14 @@ const CSS: &str = include_str!("style.css");
 
 fn main() -> gtk::glib::ExitCode {
     #[cfg(target_os = "windows")]
-    let _running = match windows::running_guard() {
+    let _running = match windows::initialize() {
         Ok(guard) => guard,
         Err(error) => {
             windows::show_error(&error);
             return gtk::glib::ExitCode::FAILURE;
         }
     };
-    #[cfg(target_os = "windows")]
-    if let Err(error) = windows::prepare_runtime() {
-        windows::show_error(&error);
-        return gtk::glib::ExitCode::FAILURE;
-    }
+    
     gtk::glib::set_application_name("Школьный день");
     let app = adw::Application::builder().application_id(APP_ID).build();
     app.connect_activate(|app| {
