@@ -1,10 +1,13 @@
-name: Сборка Windows
+name: Сборка Windows и Flatpak
 
 on:
   workflow_dispatch:
   push:
     tags:
       - 'v*.*.*'
+
+permissions:
+  contents: read
 
 jobs:
   build:
@@ -95,7 +98,7 @@ jobs:
   release:
     name: Подготовить релиз
     needs: [build, flatpak]
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-24.04
 
     permissions:
