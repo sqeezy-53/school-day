@@ -1,0 +1,63 @@
+name: Сборка Windows
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    container: debian:trixie
+    steps:
+      - name: Установить компоненты
+        run: |
+          apt-get update
+          apt-get install -y ca-certificates curl git python3 make libarchive-tools pkg-config libglib2.0-bin nsis gcc-mingw-w64-ucrt64 g++-mingw-w64-ucrt64 binutils-mingw-w64-ucrt64 build-essential
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
+          export PATH="$HOME/.cargo/bin:$PATH"
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+          rustup target add x86_64-pc-windows-gnu
+
+      - name: Получить исходники
+        uses: actions/checkout@v7
+
+      - name: Проверка репозитория
+        run: |
+          git config --system --add safe.directory "$GITHUB_WORKSPACE"
+          git rev-parse --show-toplevel
+          git rev-parse --short HEAD
+
+      - name: Показать файлы
+        run: ls -la
+
+      - name: Проверить все ли установлено
+        run: |
+          rustc --version
+          cargo --version
+          rustup target list --installed
+          command -v x86_64-w64-mingw32ucrt-gcc
+          x86_64-w64-mingw32ucrt-gcc --version
+          command -v cc
+          cc --version
+          command -v x86_64-w64-mingw32ucrt-dlltool
+
+      - name: Собрать под винду
+        env:
+          CARGO_TARGET_X86_64_PC_WINDOWS_GNU_RUSTFLAGS: "-C dlltool=/usr/bin/x86_64-w64-mingw32ucrt-dlltool"
+        run: |
+          python3 packaging/build-windows.py \
+          --work-dir "$RUNNER_TEMP/school-day-build" \
+          --output-dir "$GITHUB_WORKSPACE/artifacts" \
+          --cross-bin /usr/bin \
+          --makensis /usr/bin/makensis \
+          --nsis-dir /usr/share/nsis \
+          --cross-prefix x86_64-w64-mingw32ucrt-
+          
+      - name: Сохранить файлы сборки
+        uses: actions/upload-artifact@v7
+        with:
+          name: school-day-windows
+          path: artifacts/
+          if-no-files-found: error
