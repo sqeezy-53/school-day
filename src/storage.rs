@@ -29,13 +29,10 @@ fn lock_directory(directory: &Path) -> Result<File, String> {
         .map_err(|error| error.to_string())?;
     match file.try_lock() {
         Ok(()) => Ok(file),
-        Err(TryLockError::WouldBlock) => Err(
-            "Приложение уже запущено. Закройте другое окно и попробуйте снова."
-                .into(),
-        ),
-        Err(TryLockError::Error(error)) => {
-            Err(format!("Ошибка блокировки данных: {error}"))
+        Err(TryLockError::WouldBlock) => {
+            Err("Приложение уже запущено. Закройте другое окно и попробуйте снова.".into())
         }
+        Err(TryLockError::Error(error)) => Err(format!("Ошибка блокировки данных: {error}")),
     }
 }
 
@@ -187,7 +184,7 @@ fn write_json(directory: &Path, name: &str, json: &[u8]) -> std::io::Result<()> 
         use std::os::unix::fs::OpenOptionsExt;
         options.mode(0o600);
     }
- 
+
     let mut file = options.open(&temporary)?;
     let result = (|| {
         file.write_all(json)?;
@@ -233,6 +230,30 @@ mod tests {
         assert!(lock_directory(&sandbox.0).is_err());
         drop(first);
         assert!(lock_directory(&sandbox.0).is_ok());
+    }
+
+    #[test]
+    fn settings_keep_hiding_preferences_after_atomic_save_and_reload()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let sandbox = Sandbox::new();
+        let original = crate::settings::Settings {
+            class: "9Б".into(),
+            hide_old_lessons: true,
+            old_lesson_days: 180,
+            ..crate::settings::Settings::default()
+        };
+        let path = sandbox.0.join("settings.json");
+        write_json(&sandbox.0, "settings.json", &serde_json::to_vec(&original)?)?;
+        let mut loaded: crate::settings::Settings = serde_json::from_str(&read_json_file(&path)?)?;
+        assert!(loaded == original);
+        loaded.class = "10Б".into();
+        loaded.check_updates = true;
+        write_json(&sandbox.0, "settings.json", &serde_json::to_vec(&loaded)?)?;
+        let reloaded: crate::settings::Settings = serde_json::from_str(&read_json_file(&path)?)?;
+        assert!(reloaded == loaded);
+        assert!(reloaded.hide_old_lessons);
+        assert_eq!(reloaded.old_lesson_days, 180);
+        Ok(())
     }
 
     #[test]

@@ -26,6 +26,8 @@ pub struct Settings {
     pub dark_from: NaiveTime,
     pub bells: BellSchedule,
     pub check_updates: bool,
+    pub hide_old_lessons: bool,
+    pub old_lesson_days: u16,
 }
 
 impl Default for Settings {
@@ -37,6 +39,8 @@ impl Default for Settings {
             dark_from: NaiveTime::from_hms_opt(20, 0, 0).unwrap(),
             bells: BellSchedule::default(),
             check_updates: false,
+            hide_old_lessons: false,
+            old_lesson_days: 14,
         }
     }
 }
@@ -61,6 +65,9 @@ impl Settings {
 }
 
 fn validate(settings: &Settings) -> Result<(), String> {
+    if !(1..=180).contains(&settings.old_lesson_days) {
+        return Err("Срок скрытия должен быть от 1 до 180 дней".to_string());
+    }
     if settings.class.contains('\0') {
         return Err("Недопустимые символы в названии класса".to_string());
     }
@@ -187,10 +194,7 @@ fn settings_form(status: &gtk::Label, brand: &gtk::Label, container: &gtk::Box) 
                         let message = backup.map_or_else(
                             || "Настройки восстановлены".to_string(),
                             |path| {
-                                format!(
-                                    "Настройки сброшены. Резервная копия: {}",
-                                    path.display()
-                                )
+                                format!("Настройки сброшены. Резервная копия: {}", path.display())
                             },
                         );
                         notify(&status, &message);
@@ -240,6 +244,39 @@ fn settings_form(status: &gtk::Label, brand: &gtk::Label, container: &gtk::Box) 
 
     page.append(&automatic);
 
+    let old_lessons = column(12);
+    old_lessons.add_css_class("settings-section");
+    old_lessons.append(&text("Старые уроки", "settings-title"));
+    let hide_row = gtk::Box::new(gtk::Orientation::Horizontal, 12);
+    let hide_label = text("Автоматически скрывать старые уроки", "section");
+    hide_label.set_hexpand(true);
+    let hide_old = gtk::Switch::new();
+    hide_old.set_valign(gtk::Align::Center);
+    hide_old.set_active(loaded.hide_old_lessons);
+    hide_label.set_mnemonic_widget(Some(&hide_old));
+    hide_row.append(&hide_label);
+    hide_row.append(&hide_old);
+    old_lessons.append(&hide_row);
+    let days_label = text(
+        &format!("Скрывать уроки старше {} дней", loaded.old_lesson_days),
+        "section",
+    );
+    let days = gtk::Scale::with_range(gtk::Orientation::Horizontal, 1.0, 180.0, 1.0);
+    days.set_digits(0);
+    days.set_round_digits(0);
+    days.set_draw_value(false);
+    days.set_value(f64::from(loaded.old_lesson_days));
+    days.set_sensitive(loaded.hide_old_lessons);
+    days.set_tooltip_text(Some("Срок скрытия старых уроков в днях"));
+    days_label.set_mnemonic_widget(Some(&days));
+    old_lessons.append(&days_label);
+    old_lessons.append(&days);
+    old_lessons.append(&text(
+        "Уроки не удаляются. История расписания и домашние задания сохраняются",
+        "muted",
+    ));
+    page.append(&old_lessons);
+
     page.append(&text("Сохраняется автоматически", "muted"));
 
     let current = Rc::new(RefCell::new(loaded));
@@ -248,6 +285,8 @@ fn settings_form(status: &gtk::Label, brand: &gtk::Label, container: &gtk::Box) 
     let weak_class = class.downgrade();
     let weak_class_error = class_error.downgrade();
     let weak_theme = theme.downgrade();
+    let weak_hide_old = hide_old.downgrade();
+    let weak_days = days.downgrade();
 
     let weak_times = [
         light_hour.downgrade(),
@@ -274,6 +313,8 @@ fn settings_form(status: &gtk::Label, brand: &gtk::Label, container: &gtk::Box) 
             Some(status),
             Some(brand),
             Some(automatic),
+            Some(hide_old),
+            Some(days),
         ) = (
             weak_class.upgrade(),
             weak_class_error.upgrade(),
@@ -281,6 +322,8 @@ fn settings_form(status: &gtk::Label, brand: &gtk::Label, container: &gtk::Box) 
             weak_status.upgrade(),
             weak_brand.upgrade(),
             weak_automatic.upgrade(),
+            weak_hide_old.upgrade(),
+            weak_days.upgrade(),
         )
         else {
             return;
@@ -340,6 +383,8 @@ fn settings_form(status: &gtk::Label, brand: &gtk::Label, container: &gtk::Box) 
 
             bells: saved.borrow().bells.clone(),
             check_updates: saved.borrow().check_updates,
+            hide_old_lessons: hide_old.is_active(),
+            old_lesson_days: days.value().round() as u16,
         };
 
         automatic.set_visible(candidate.theme == Theme::Auto);
@@ -373,6 +418,42 @@ fn settings_form(status: &gtk::Label, brand: &gtk::Label, container: &gtk::Box) 
         let callback = Rc::clone(&commit);
         spin.connect_value_changed(move |_| callback());
     }
+
+    let callback = Rc::clone(&commit);
+    let weak_days = days.downgrade();
+    hide_old.connect_active_notify(move |switch| {
+        if let Some(days) = weak_days.upgrade() {
+            days.set_sensitive(switch.is_active());
+        }
+        callback();
+    });
+
+    let pending = Rc::new(RefCell::new(None::<gtk::glib::SourceId>));
+    let pending_save = Rc::clone(&pending);
+    let callback = Rc::clone(&commit);
+    let weak_days_label = days_label.downgrade();
+    days.connect_value_changed(move |days| {
+        if let Some(label) = weak_days_label.upgrade() {
+            label.set_text(&format!("Скрывать уроки старше {:.0} дней", days.value()));
+        }
+        if let Some(source) = pending_save.borrow_mut().take() {
+            source.remove();
+        }
+        let callback = Rc::clone(&callback);
+        let pending = Rc::clone(&pending_save);
+        let source =
+            gtk::glib::timeout_add_local_once(std::time::Duration::from_millis(400), move || {
+                pending.borrow_mut().take();
+                callback();
+            });
+        *pending_save.borrow_mut() = Some(source);
+    });
+    page.connect_unmap(move |_| {
+        if let Some(source) = pending.borrow_mut().take() {
+            source.remove();
+            commit();
+        }
+    });
 
     let initial_bells = current.borrow().bells.clone();
     let school_settings = Rc::clone(&current);
@@ -419,6 +500,52 @@ fn settings_form(status: &gtk::Label, brand: &gtk::Label, container: &gtk::Box) 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn legacy_settings_keep_values_and_default_to_no_hiding() -> Result<(), serde_json::Error> {
+        let settings: Settings =
+            serde_json::from_str(r#"{"class":"9Б","theme":"dark","check_updates":true}"#)?;
+        assert_eq!(settings.class, "9Б");
+        assert!(settings.theme == Theme::Dark);
+        assert!(settings.check_updates);
+        assert!(!settings.hide_old_lessons);
+        assert_eq!(settings.old_lesson_days, 14);
+        assert!(validate(&settings).is_ok());
+        Ok(())
+    }
+
+    #[test]
+    fn hiding_settings_survive_round_trips_and_other_changes() -> Result<(), serde_json::Error> {
+        for days in [1, 14, 180] {
+            let original = Settings {
+                class: "9Б".into(),
+                hide_old_lessons: true,
+                old_lesson_days: days,
+                ..Settings::default()
+            };
+            let mut loaded: Settings = serde_json::from_str(&serde_json::to_string(&original)?)?;
+            assert!(loaded == original);
+            loaded.theme = Theme::Dark;
+            loaded.class = "10Б".into();
+            loaded.check_updates = true;
+            loaded.bells.lesson_minutes = 45;
+            let reloaded: Settings = serde_json::from_str(&serde_json::to_string(&loaded)?)?;
+            assert!(reloaded == loaded);
+            assert!(reloaded.hide_old_lessons);
+            assert_eq!(reloaded.old_lesson_days, days);
+            assert!(validate(&reloaded).is_ok());
+        }
+        for days in [0, 181] {
+            assert!(
+                validate(&Settings {
+                    old_lesson_days: days,
+                    ..Settings::default()
+                })
+                .is_err()
+            );
+        }
+        Ok(())
+    }
 
     #[test]
     fn equal_automatic_times_do_not_block_manual_themes() {
