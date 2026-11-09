@@ -2,6 +2,9 @@ name: Сборка Windows
 
 on:
   workflow_dispatch:
+  push:
+    tags:
+      - 'v*.*.*'
 
 jobs:
   build:
@@ -59,3 +62,67 @@ jobs:
           path: artifacts/
           if-no-files-found: error
         
+  
+  flatpak:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+
+    steps:
+      - name: Получаем исходники
+        uses: actions/checkout@v7
+
+      - name: Установка необходимого
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y flatpak flatpak-builder
+          rustup update stable
+
+      - name: Собрать Flatpak
+        run: |
+          python3 packaging/build-flatpak.py \
+            --work-dir "$RUNNER_TEMP/school-day-flatpak" \
+            --output-dir "$GITHUB_WORKSPACE/flatpak-artifacts"
+
+      - name: Сохранить Flatpak
+        uses: actions/upload-artifact@v7
+        with:
+          name: school-day-flatpak
+          path: flatpak-artifacts/
+          if-no-files-found: error
+
+  
+  release:
+    name: Подготовить релиз
+    needs: [build, flatpak]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Скачать Windows-сборку
+        uses: actions/download-artifact@v8
+        with:
+          name: school-day-windows
+          path: release-files
+
+      - name: Скачать Flatpak
+        uses: actions/download-artifact@v8
+        with:
+          name: school-day-flatpak
+          path: release-files
+
+      - name: Создать черновик
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" release-files/* \
+            --verify-tag \
+            --draft \
+            --title "Школьный день ${GITHUB_REF_NAME#v}" \
+            --generate-notes
+
+  
