@@ -1,5 +1,12 @@
 use std::os::windows::process::CommandExt;
 
+pub fn initialize() -> Result<OwnedHandle, String> {
+    let guard = running_guard()?;
+    prepare_runtime()?;
+    Ok(guard)
+    
+}
+
 pub fn running_guard() -> Result<std::os::windows::io::OwnedHandle, String> {
     use std::os::windows::io::FromRawHandle;
     #[link(name = "kernel32")]
