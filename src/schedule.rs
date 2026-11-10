@@ -44,7 +44,6 @@ pub fn schedule_page(status: &gtk::Label, lessons: Lessons, undo: Option<&UndoHa
         }
     }
     let today = gtk::Button::with_label("Сегодня");
-    Anchor::Today.mark(&today);
     today.add_css_class("flat");
     let calendar_for_today = calendar.clone();
     today.connect_clicked(move |_| {
@@ -139,13 +138,13 @@ pub fn schedule_page(status: &gtk::Label, lessons: Lessons, undo: Option<&UndoHa
     page
 }
 
-fn selected_date(calendar: &gtk::Calendar) -> NaiveDate {
+pub(crate) fn selected_date(calendar: &gtk::Calendar) -> NaiveDate {
     let date = calendar.date();
     NaiveDate::from_ymd_opt(date.year(), date.month() as u32, date.day_of_month() as u32)
         .expect("Не удалось получить выбранную дату")
 }
 
-fn select_date(calendar: &gtk::Calendar, date: NaiveDate) {
+pub(crate) fn select_date(calendar: &gtk::Calendar, date: NaiveDate) {
     if let Ok(date) = gtk::glib::DateTime::from_local(
         date.year(),
         date.month() as i32,
@@ -158,10 +157,11 @@ fn select_date(calendar: &gtk::Calendar, date: NaiveDate) {
     }
 }
 
-fn date_button(calendar: &gtk::Calendar) -> gtk::MenuButton {
+pub(crate) fn date_button(calendar: &gtk::Calendar) -> gtk::MenuButton {
     let button = gtk::MenuButton::new();
     button.set_label(&selected_date(calendar).format("%d.%m.%Y").to_string());
     let popover = gtk::Popover::new();
+    popover.set_has_arrow(false);
     let preview = gtk::Calendar::new();
     popover.set_child(Some(&preview));
     button.set_popover(Some(&popover));
@@ -251,11 +251,7 @@ fn render_lessons(
         .cloned()
         .collect();
     if day.is_empty() {
-        list.append(&empty_state(
-            "x-office-calendar-symbolic",
-            "Нет уроков",
-            "Добавьте урок на выбранную дату.",
-        ));
+        list.append(&empty_state("x-office-calendar-symbolic", "Нет уроков"));
         return;
     }
     for lesson in day {
@@ -297,11 +293,8 @@ fn render_lessons(
             button.add_css_class("flat");
             button.set_tooltip_text(Some(label));
             button.set_valign(gtk::Align::Center);
-            if editing {
-                Anchor::EditLesson.mark(&button);
-                if focus_time == Some(lesson.time) {
-                    focus = Some(button.clone());
-                }
+            if editing && focus_time == Some(lesson.time) {
+                focus = Some(button.clone());
             }
             let (items, calendar, status, weak_list) = (
                 lessons.clone(),
@@ -589,12 +582,6 @@ fn on_add_lesson(
     root.append(&header);
     let form = column(12);
     margins(&form, 24);
-    if lessons.is_practice() {
-        form.append(&text(
-            "Учебный урок исчезнет после выхода из обучения.",
-            "muted",
-        ));
-    }
     let title = field(&form, "Предмет", "Например, алгебра");
     let title_error = forms::error_label(&form, &title);
     let suggestions = gtk::ListBox::new();
@@ -749,7 +736,7 @@ fn on_add_lesson(
     }
     connect_subject_suggestions(&title, &room, &suggestions, lessons);
 
-    let feedback = text("", "muted");
+    let feedback = text("", "form-error");
     feedback.set_visible(false);
     for (entry, error) in [(&title, &title_error), (&room, &room_error)] {
         let feedback = feedback.clone();
@@ -978,15 +965,16 @@ fn on_add_lesson(
                     let focus = id.map(|_| start_picker.time());
                     render_lessons(&list, &items, &calendar, &status, focus, undo.as_ref());
                 }
-                notify(
-                    &status,
-                    match (id.is_some(), attached) {
-                        (true, true) => "Урок сохранён, ДЗ прикреплено",
-                        (false, true) => "Урок добавлен, ДЗ прикреплено",
-                        (true, false) => "Урок сохранён",
-                        (false, false) => "Урок добавлен",
-                    },
-                );
+                let message = if attached.is_empty() {
+                    if id.is_some() {
+                        "Урок сохранён".to_string()
+                    } else {
+                        "Урок добавлен".to_string()
+                    }
+                } else {
+                    items.attachment_notice(&attached)
+                };
+                notify(&status, &message);
                 if let Some(window) = weak_window.upgrade() {
                     window.close();
                 }

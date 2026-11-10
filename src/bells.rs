@@ -225,7 +225,7 @@ pub fn editor(
     initial: &BellSchedule,
     on_change: impl Fn(BellSchedule) -> Result<(), String> + 'static,
 ) -> gtk::Box {
-    let root = column(16);
+    let root = column(24);
     root.set_widget_name("bell-settings");
     root.add_css_class("settings-section");
     let title = text("Звонки", "settings-title");
@@ -233,8 +233,8 @@ pub fn editor(
     crate::tutorial::Anchor::Bells.mark(&title);
     root.append(&title);
     let controls = adw::WrapBox::new();
-    controls.set_child_spacing(16);
-    controls.set_line_spacing(12);
+    controls.set_child_spacing(32);
+    controls.set_line_spacing(24);
     let length_group = column(8);
     length_group.set_hexpand(true);
     length_group.append(&text("Длительность", "section"));
@@ -262,12 +262,12 @@ pub fn editor(
     count_group.append(&count);
     controls.append(&count_group);
     root.append(&controls);
-    let feedback = text("", "error");
+    let feedback = text("", "form-error");
     feedback.set_visible(false);
     root.append(&feedback);
     let grid = gtk::Grid::new();
     grid.set_column_spacing(10);
-    grid.set_row_spacing(8);
+    grid.set_row_spacing(12);
     grid.add_css_class("bell-table");
     root.append(&grid);
 

@@ -131,14 +131,22 @@ fn time_field(title: &str, value: NaiveTime) -> (gtk::Box, gtk::SpinButton, gtk:
     (group, hour, minute)
 }
 
-pub fn settings_page(status: &gtk::Label, brand: &gtk::Label) -> gtk::Box {
+pub fn settings_page(status: &gtk::Label, brand: &gtk::Label, service: &gtk::Box) -> gtk::Box {
     let container = column(0);
-    container.append(&settings_form(status, brand, &container));
+    container.append(&settings_form(status, brand, &container, service));
     container
 }
 
-fn settings_form(status: &gtk::Label, brand: &gtk::Label, container: &gtk::Box) -> gtk::Box {
-    let page = column(24);
+fn settings_form(
+    status: &gtk::Label,
+    brand: &gtk::Label,
+    container: &gtk::Box,
+    service: &gtk::Box,
+) -> gtk::Box {
+    while let Some(child) = service.first_child() {
+        service.remove(&child);
+    }
+    let page = column(32);
     let heading = gtk::Box::new(gtk::Orientation::Horizontal, 12);
     let title = text("Настройки", "title");
     title.set_hexpand(true);
@@ -156,12 +164,16 @@ fn settings_form(status: &gtk::Label, brand: &gtk::Label, container: &gtk::Box) 
         Ok(settings) => settings,
 
         Err(error) => {
+            service.append(&crate::updates::indicator(false, |_| {
+                Err("Сначала восстановите настройки приложения".into())
+            }));
             page.append(&text(
                 &format!("Не удалось загрузить настройки: {error}"),
-                "muted",
+                "form-error",
             ));
             let reset = primary("Восстановить настройки по умолчанию");
             let (status, brand, container) = (status.clone(), brand.clone(), container.downgrade());
+            let weak_service = service.downgrade();
             reset.connect_clicked(move |_| {
                 let Some(container) = container.upgrade() else {
                     return;
@@ -171,7 +183,9 @@ fn settings_form(status: &gtk::Label, brand: &gtk::Label, container: &gtk::Box) 
                         while let Some(child) = container.first_child() {
                             container.remove(&child);
                         }
-                        container.append(&settings_form(&status, &brand, &container));
+                        if let Some(service) = weak_service.upgrade() {
+                            container.append(&settings_form(&status, &brand, &container, &service));
+                        }
                         let message = backup.map_or_else(
                             || "Настройки восстановлены".to_string(),
                             |path| {
@@ -194,11 +208,63 @@ fn settings_form(status: &gtk::Label, brand: &gtk::Label, container: &gtk::Box) 
 
     apply_settings(&loaded, brand);
 
-    let class = field(&page, "Класс", "Например, 7А");
-    class.set_text(&loaded.class);
-    let class_error = forms::error_label(&page, &class);
+    let sections = gtk::Stack::new();
+    sections.set_vhomogeneous(false);
+    sections.add_named(&page, Some("main"));
+    let advanced = column(28);
+    let back_row = gtk::Box::new(gtk::Orientation::Horizontal, 12);
+    let back = gtk::Button::from_icon_name("go-previous-symbolic");
+    back.set_tooltip_text(Some("Назад к настройкам"));
+    back.add_css_class("flat");
+    back_row.append(&back);
+    back_row.append(&text("Дополнительные настройки", "settings-title"));
+    advanced.append(&back_row);
+    sections.add_named(&advanced, Some("advanced"));
+    let actions = gtk::gio::SimpleActionGroup::new();
+    let show_main = gtk::gio::SimpleAction::new("main", None);
+    let weak_sections = sections.downgrade();
+    show_main.connect_activate(move |_, _| {
+        if let Some(sections) = weak_sections.upgrade() {
+            sections.set_visible_child_name("main");
+        }
+    });
+    actions.add_action(&show_main);
+    container.insert_action_group("settings", Some(&actions));
+    let more = gtk::Button::new();
+    more.add_css_class("settings-link");
+    let more_row = gtk::Box::new(gtk::Orientation::Horizontal, 12);
+    let more_label = text("Дополнительные настройки", "section");
+    more_label.set_hexpand(true);
+    more_row.append(&more_label);
+    more_row.append(&gtk::Image::from_icon_name("go-next-symbolic"));
+    more.set_child(Some(&more_row));
+    let weak_sections = sections.downgrade();
+    let weak_back = back.downgrade();
+    more.connect_clicked(move |_| {
+        if let Some(sections) = weak_sections.upgrade() {
+            sections.set_visible_child_name("advanced");
+        }
+        if let Some(back) = weak_back.upgrade() {
+            back.grab_focus();
+        }
+    });
+    let weak_container = container.downgrade();
+    let weak_more = more.downgrade();
+    back.connect_clicked(move |_| {
+        if let Some(container) = weak_container.upgrade() {
+            let _ = container.activate_action("settings.main", None);
+        }
+        if let Some(more) = weak_more.upgrade() {
+            more.grab_focus();
+        }
+    });
 
-    page.append(&text("Тема", "section"));
+    let class = field(&advanced, "Класс", "Например, 7А");
+    class.set_text(&loaded.class);
+    let class_error = forms::error_label(&advanced, &class);
+
+    let appearance = column(12);
+    appearance.append(&text("Тема", "section"));
 
     let theme = gtk::DropDown::from_strings(&["Светлая", "Тёмная", "Авто"]);
     Anchor::Theme.mark(&theme);
@@ -209,7 +275,7 @@ fn settings_form(status: &gtk::Label, brand: &gtk::Label, container: &gtk::Box) 
         Theme::Auto => 2,
     });
 
-    page.append(&theme);
+    appearance.append(&theme);
 
     let automatic = adw::WrapBox::new();
     automatic.set_child_spacing(24);
@@ -223,9 +289,10 @@ fn settings_form(status: &gtk::Label, brand: &gtk::Label, container: &gtk::Box) 
     automatic.append(&dark_group);
     automatic.set_visible(loaded.theme == Theme::Auto);
 
-    page.append(&automatic);
+    appearance.append(&automatic);
+    page.append(&appearance);
 
-    let old_lessons = column(12);
+    let old_lessons = column(18);
     old_lessons.add_css_class("settings-section");
     old_lessons.append(&text("Старые уроки", "settings-title"));
     let hide_row = gtk::Box::new(gtk::Orientation::Horizontal, 12);
@@ -252,13 +319,7 @@ fn settings_form(status: &gtk::Label, brand: &gtk::Label, container: &gtk::Box) 
     days_label.set_mnemonic_widget(Some(&days));
     old_lessons.append(&days_label);
     old_lessons.append(&days);
-    old_lessons.append(&text(
-        "Уроки не удаляются. История расписания и домашние задания сохраняются",
-        "muted",
-    ));
-    page.append(&old_lessons);
-
-    page.append(&text("Сохраняется автоматически", "muted"));
+    advanced.append(&old_lessons);
 
     let current = Rc::new(RefCell::new(loaded));
     let saved = Rc::clone(&current);
@@ -429,12 +490,16 @@ fn settings_form(status: &gtk::Label, brand: &gtk::Label, container: &gtk::Box) 
             });
         *pending_save.borrow_mut() = Some(source);
     });
-    page.connect_unmap(move |_| {
-        if let Some(source) = pending.borrow_mut().take() {
-            source.remove();
-            commit();
-        }
-    });
+    for section in [&page, &advanced] {
+        let pending = Rc::clone(&pending);
+        let commit = Rc::clone(&commit);
+        section.connect_unmap(move |_| {
+            if let Some(source) = pending.borrow_mut().take() {
+                source.remove();
+                commit();
+            }
+        });
+    }
 
     let initial_bells = current.borrow().bells.clone();
     let school_settings = Rc::clone(&current);
@@ -450,9 +515,11 @@ fn settings_form(status: &gtk::Label, brand: &gtk::Label, container: &gtk::Box) 
         Ok(())
     }));
 
+    page.append(&more);
+
     let automatic_updates = current.borrow().check_updates;
     let update_settings = Rc::clone(&current);
-    page.append(&crate::updates::section(
+    service.append(&crate::updates::indicator(
         automatic_updates,
         move |enabled| {
             let mut candidate = update_settings.borrow().clone();
@@ -465,8 +532,12 @@ fn settings_form(status: &gtk::Label, brand: &gtk::Label, container: &gtk::Box) 
 
     let weak_brand = brand.downgrade();
 
+    let weak_page = page.downgrade();
     gtk::glib::timeout_add_seconds_local(60, move || {
-        let Some(brand) = weak_brand.upgrade() else {
+        let Some(brand) = weak_brand
+            .upgrade()
+            .filter(|_| weak_page.upgrade().is_some())
+        else {
             return gtk::glib::ControlFlow::Break;
         };
 
@@ -475,7 +546,9 @@ fn settings_form(status: &gtk::Label, brand: &gtk::Label, container: &gtk::Box) 
         gtk::glib::ControlFlow::Continue
     });
 
-    page
+    let root = column(0);
+    root.append(&sections);
+    root
 }
 
 #[cfg(test)]

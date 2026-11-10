@@ -1,10 +1,12 @@
 use adw::prelude::*;
 use chrono::{Datelike, NaiveDate};
 use std::cell::RefCell;
+use std::collections::HashSet;
 use std::rc::Rc;
 
 use crate::forms::{self, HOMEWORK_LIMIT, SUBJECT_LIMIT, length_error};
-use crate::lessons::{Homework, HomeworkId, Lesson, Lessons, RecordId, same_subject};
+use crate::lessons::{Homework, HomeworkId, Lessons, RecordId, same_subject};
+use crate::schedule::{date_button, select_date, selected_date};
 use crate::settings::{Settings, load_settings};
 use crate::tutorial::Anchor;
 use crate::undo::UndoHandle;
@@ -91,7 +93,7 @@ impl HomeworkList {
 
         if tasks.len() == done {
             let message = if done == 0 {
-                "Заданий пока нет. Нажмите «Добавить ДЗ»."
+                "Заданий пока нет."
             } else {
                 "Все задания выполнены."
             };
@@ -125,7 +127,14 @@ impl HomeworkList {
             title.push_str(&format!(" · {}", date.format("%d.%m.%Y")));
         }
         details.append(&text(&title, "section"));
-        if matches!(id, HomeworkId::Pending(_)) {
+        if let HomeworkId::Linked(lesson) = id {
+            if let Some(lesson) = self.lessons.borrow().iter().find(|item| item.id == lesson) {
+                details.append(&text(
+                    &format!("Урок в {}", lesson.time.format("%H:%M")),
+                    "muted",
+                ));
+            }
+        } else {
             details.append(&text("Без урока", "section"));
         }
         details.append(&text(&task.body, "muted"));
@@ -271,12 +280,18 @@ impl HomeworkList {
                 }
             }
         };
+        let today = chrono::Local::now().date_naive();
+        let initial_date =
+            initial_lesson_date(&self.lessons, existing.as_deref(), &settings, today);
+        let calendar = gtk::Calendar::new();
+        select_date(&calendar, initial_date);
         let choices = lesson_choices(
             &self.lessons,
             existing.as_deref(),
             &settings,
-            chrono::Local::now().date_naive(),
+            today,
             false,
+            Some(initial_date),
         );
         if choices.is_empty() {
             notify(&self.status, "Сначала добавьте урок в расписании.");
@@ -298,49 +313,112 @@ impl HomeworkList {
         header.set_title_widget(Some(&text(heading, "section")));
         root.append(&header);
 
-        let form = column(16);
-        margins(&form, 24);
-        if self.lessons.is_practice() {
-            form.append(&text(
-                "Учебное ДЗ исчезнет после выхода из обучения.",
-                "muted",
-            ));
+        let form = column(24);
+        margins(&form, 20);
+        let date_group = column(8);
+        date_group.append(&text("Дата урока", "section"));
+        let dates = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+        let date_menu = date_button(&calendar);
+        date_menu.set_hexpand(true);
+        for (icon, offset, label) in [
+            ("go-previous-symbolic", -1, "Предыдущий день"),
+            ("go-next-symbolic", 1, "Следующий день"),
+        ] {
+            let button = gtk::Button::from_icon_name(icon);
+            button.set_tooltip_text(Some(label));
+            let weak_calendar = calendar.downgrade();
+            button.connect_clicked(move |_| {
+                if let Some(calendar) = weak_calendar.upgrade()
+                    && let Ok(date) = calendar.date().add_days(offset)
+                {
+                    calendar.select_day(&date);
+                }
+            });
+            dates.append(&button);
+            if offset == -1 {
+                dates.append(&date_menu);
+            }
         }
-        let selector_label = text("К какому уроку", "section");
+        let current_day = gtk::Button::with_label("Сегодня");
+        let weak_calendar = calendar.downgrade();
+        current_day.connect_clicked(move |_| {
+            if let Some(calendar) = weak_calendar.upgrade() {
+                select_date(&calendar, chrono::Local::now().date_naive());
+            }
+        });
+        dates.append(&current_day);
+        dates.set_sensitive(!matches!(id, Some(HomeworkId::Linked(_))));
+        date_group.append(&dates);
+        form.append(&date_group);
+        let lesson_group = column(8);
+        let selection_heading = adw::WrapBox::new();
+        selection_heading.set_child_spacing(16);
+        selection_heading.set_line_spacing(8);
+        let selector_label = text("Урок в этот день", "section");
+        selector_label.set_hexpand(true);
         selector_label.set_mnemonic_widget(Some(&selector));
-        form.append(&selector_label);
-        form.append(&selector);
+        selection_heading.append(&selector_label);
         let show_all = gtk::CheckButton::with_label("Показать все уроки");
-        show_all
-            .set_visible(settings.hide_old_lessons && !matches!(id, Some(HomeworkId::Linked(_))));
-        form.append(&show_all);
+        let has_filter = settings.hide_old_lessons && !matches!(id, Some(HomeworkId::Linked(_)));
+        show_all.set_visible(has_filter);
+        selection_heading.append(&show_all);
+        lesson_group.append(&selection_heading);
+        lesson_group.append(&selector);
+        let has_lessons = choices.borrow().iter().any(|(id, _)| id.is_some());
+        let empty_day = text("Урока ещё нет", "section");
+        empty_day.set_visible(!has_lessons);
+        selector.set_visible(has_lessons);
+        selector_label.set_visible(has_lessons);
+        selection_heading.set_visible(has_lessons || has_filter);
+        lesson_group.append(&empty_day);
+        form.append(&lesson_group);
 
-        let standalone = column(12);
+        let standalone = column(8);
         let subject = field(&standalone, "Предмет", "Например, алгебра");
         let subject_error = forms::error_label(&standalone, &subject);
-        let due = field(&standalone, "Дата (необязательно)", "ДД.ММ.ГГГГ");
-        let due_error = forms::error_label(&standalone, &due);
-        standalone.append(&text(
-            "С датой задание сможет привязаться к уроку автоматически.",
-            "muted",
-        ));
+        let date_details = column(8);
+        let due = gtk::Entry::builder().placeholder_text("ДД.ММ.ГГГГ").build();
+        date_details.append(&due);
+        let due_error = forms::error_label(&date_details, &due);
+        let optional_date = gtk::Expander::new(Some("Дата (необязательно)"));
+        optional_date.set_child(Some(&date_details));
+        optional_date.set_expanded(existing.as_ref().is_some_and(|task| task.date.is_some()));
+        let weak_optional_date = optional_date.downgrade();
+        due.connect_changed(move |due| {
+            if let Some(expander) = weak_optional_date.upgrade() {
+                let value = due.text();
+                let label = if value.trim().is_empty() {
+                    "Дата (необязательно)".to_string()
+                } else {
+                    format!("Дата: {}", value.trim())
+                };
+                expander.set_label(Some(&label));
+            }
+        });
         standalone.set_visible(choices.borrow()[0].0.is_none());
+        optional_date.set_visible(standalone.get_visible());
         let selected_choices = Rc::clone(&choices);
         let standalone_section = standalone.clone();
+        let optional_date_section = optional_date.clone();
         selector.connect_selected_item_notify(move |selector| {
-            standalone_section.set_visible(
-                selected_choices
-                    .borrow()
-                    .get(selector.selected() as usize)
-                    .map(|(id, _)| id.is_none())
-                    .unwrap_or(false),
-            );
+            let unlinked = selected_choices
+                .borrow()
+                .get(selector.selected() as usize)
+                .is_some_and(|(id, _)| id.is_none());
+            standalone_section.set_visible(unlinked);
+            optional_date_section.set_visible(unlinked);
         });
         let all_choices = Rc::clone(&choices);
         let lesson_list = self.lessons.clone();
         let selected_task = existing.clone();
-        let lesson_selector = selector.clone();
-        show_all.connect_toggled(move |button| {
+        let lesson_selector = selector.downgrade();
+        let weak_empty_day = empty_day.downgrade();
+        let weak_selector_label = selector_label.downgrade();
+        let weak_selection_heading = selection_heading.downgrade();
+        let rebuild: Rc<dyn Fn(NaiveDate, bool)> = Rc::new(move |date, show_all| {
+            let Some(lesson_selector) = lesson_selector.upgrade() else {
+                return;
+            };
             let selected = all_choices
                 .borrow()
                 .get(lesson_selector.selected() as usize)
@@ -350,12 +428,24 @@ impl HomeworkList {
                 selected_task.as_deref(),
                 &settings,
                 chrono::Local::now().date_naive(),
-                button.is_active(),
+                show_all,
+                Some(date),
             );
             let position = updated
                 .iter()
                 .position(|(id, _)| Some(*id) == selected)
                 .unwrap_or(0) as u32;
+            let has_lessons = updated.iter().any(|(id, _)| id.is_some());
+            lesson_selector.set_visible(has_lessons);
+            if let Some(label) = weak_empty_day.upgrade() {
+                label.set_visible(!has_lessons);
+            }
+            if let Some(label) = weak_selector_label.upgrade() {
+                label.set_visible(has_lessons);
+            }
+            if let Some(heading) = weak_selection_heading.upgrade() {
+                heading.set_visible(has_lessons || has_filter);
+            }
             let labels: Vec<_> = updated.iter().map(|(_, label)| label.as_str()).collect();
             let model = gtk::StringList::new(&labels);
             lesson_selector.set_enable_search(updated.len() > 5);
@@ -364,9 +454,26 @@ impl HomeworkList {
             lesson_selector.set_model(Some(&model));
             lesson_selector.set_selected(position);
         });
+        let callback = Rc::clone(&rebuild);
+        let weak_show_all = show_all.downgrade();
+        calendar.connect_day_selected(move |calendar| {
+            let show_all = weak_show_all
+                .upgrade()
+                .is_some_and(|button| button.is_active());
+            callback(selected_date(calendar), show_all);
+        });
+        let weak_calendar = calendar.downgrade();
+        show_all.connect_toggled(move |button| {
+            if let Some(calendar) = weak_calendar.upgrade() {
+                rebuild(selected_date(&calendar), button.is_active());
+            }
+        });
         form.append(&standalone);
 
-        let (scroll, editor) = forms::homework_editor(140);
+        let editor_group = column(8);
+        editor_group.set_vexpand(true);
+        let (scroll, editor) = forms::homework_editor(112);
+        scroll.set_vexpand(true);
         let buffer = editor.buffer();
         if let Some(task) = &existing {
             buffer.set_text(&task.body);
@@ -379,9 +486,11 @@ impl HomeworkList {
         }
         let editor_label = text("Задание", "section");
         editor_label.set_mnemonic_widget(Some(&editor));
-        form.append(&editor_label);
-        form.append(&scroll);
-        let feedback = forms::error_label(&form, &scroll);
+        editor_group.append(&editor_label);
+        editor_group.append(&scroll);
+        let feedback = forms::error_label(&editor_group, &scroll);
+        form.append(&editor_group);
+        form.append(&optional_date);
 
         for (entry, error) in [(&subject, &subject_error), (&due, &due_error)] {
             let error = error.clone();
@@ -409,7 +518,7 @@ impl HomeworkList {
         let window = adw::Window::builder()
             .title(heading)
             .default_width(520)
-            .default_height(490)
+            .default_height(600)
             .modal(true)
             .transient_for(&parent)
             .content(&root)
@@ -500,6 +609,7 @@ impl HomeworkList {
                             Ok(date) if (1..=9999).contains(&date.year()) => Some(date),
                             _ => {
                                 notify(&due_error, "Укажите дату в формате ДД.ММ.ГГГГ");
+                                optional_date.set_expanded(true);
                                 due.grab_focus();
                                 return;
                             }
@@ -518,14 +628,12 @@ impl HomeworkList {
                     list.render(id.map(|_| RowFocus::Edit(saved)));
                     let attached = matches!(saved, HomeworkId::Linked(_))
                         && (target.is_none() || matches!(id, Some(HomeworkId::Pending(_))));
-                    notify(
-                        &list.status,
-                        if attached {
-                            "Задание прикреплено к уроку"
-                        } else {
-                            "Домашнее задание сохранено"
-                        },
-                    );
+                    let message = if attached && let HomeworkId::Linked(lesson) = saved {
+                        list.lessons.attachment_notice(&[lesson])
+                    } else {
+                        "Домашнее задание сохранено".to_string()
+                    };
+                    notify(&list.status, &message);
                     if let Some(window) = weak_window.upgrade() {
                         window.close();
                     }
@@ -544,6 +652,7 @@ fn lesson_choices(
     settings: &Settings,
     today: NaiveDate,
     show_all: bool,
+    date: Option<NaiveDate>,
 ) -> Vec<(Option<RecordId>, String)> {
     let linked = existing.is_some_and(|task| matches!(task.id, HomeworkId::Linked(_)));
     let mut choices: Vec<_> = lessons
@@ -558,6 +667,7 @@ fn lesson_choices(
             },
             None => lesson.homework.trim().is_empty(),
         })
+        .filter(|lesson| date.is_none_or(|date| lesson.date == date))
         .filter(|lesson| {
             linked
                 || show_all
@@ -565,11 +675,18 @@ fn lesson_choices(
                 || today.signed_duration_since(lesson.date).num_days()
                     <= i64::from(settings.old_lesson_days)
         })
-        .map(|lesson| (Some(lesson.id), lesson_label(lesson)))
+        .map(|lesson| {
+            let label = if date.is_some() {
+                format!("{} · {}", lesson.title, lesson.time.format("%H:%M"))
+            } else {
+                lesson.label()
+            };
+            (Some(lesson.id), label)
+        })
         .collect();
     if !lessons.is_practice() && !linked {
         if existing.is_some() {
-            choices.insert(0, (None, "Оставить без урока".to_string()));
+            choices.insert(0, (None, "Урока ещё нет".to_string()));
         } else {
             choices.push((None, "Урока ещё нет".to_string()));
         }
@@ -577,13 +694,34 @@ fn lesson_choices(
     choices
 }
 
-fn lesson_label(lesson: &Lesson) -> String {
-    format!(
-        "{} · {} в {}",
-        lesson.title,
-        lesson.date.format("%d.%m.%Y"),
-        lesson.time.format("%H:%M")
-    )
+fn initial_lesson_date(
+    lessons: &Lessons,
+    existing: Option<&Homework>,
+    settings: &Settings,
+    today: NaiveDate,
+) -> NaiveDate {
+    if let Some(date) = existing.and_then(|task| task.date) {
+        return date;
+    }
+    let available: HashSet<_> = lesson_choices(lessons, existing, settings, today, false, None)
+        .into_iter()
+        .filter_map(|(id, _)| id)
+        .collect();
+    let items = lessons.borrow();
+    items
+        .iter()
+        .find(|lesson| lesson.date >= today && available.contains(&lesson.id))
+        .or_else(|| {
+            if lessons.is_practice() {
+                items
+                    .iter()
+                    .rev()
+                    .find(|lesson| available.contains(&lesson.id))
+            } else {
+                None
+            }
+        })
+        .map_or(today, |lesson| lesson.date)
 }
 
 #[cfg(test)]
@@ -616,12 +754,12 @@ mod tests {
                 old_lesson_days: days,
                 ..Settings::default()
             };
-            let selected: Vec<_> = lesson_choices(&lessons, None, &settings, today, false)
+            let selected: Vec<_> = lesson_choices(&lessons, None, &settings, today, false, None)
                 .into_iter()
                 .map(|(id, _)| id)
                 .collect();
             assert_eq!(selected, all_ids[all_ids.len() - count..]);
-            let shown: Vec<_> = lesson_choices(&lessons, None, &settings, today, true)
+            let shown: Vec<_> = lesson_choices(&lessons, None, &settings, today, true, None)
                 .into_iter()
                 .map(|(id, _)| id)
                 .collect();
@@ -665,14 +803,14 @@ mod tests {
             ..Settings::default()
         };
         for show_all in [false, true] {
-            let choices = lesson_choices(&lessons, Some(linked), &settings, today, show_all);
+            let choices = lesson_choices(&lessons, Some(linked), &settings, today, show_all, None);
             assert_eq!(choices.len(), 1);
             assert_eq!(choices[0].0, Some(old_id));
         }
-        let filtered = lesson_choices(&lessons, Some(pending), &settings, today, false);
+        let filtered = lesson_choices(&lessons, Some(pending), &settings, today, false, None);
         assert_eq!(filtered.len(), 1);
         assert_eq!(filtered[0].0, Some(original[2].id));
-        let shown = lesson_choices(&lessons, Some(pending), &settings, today, true);
+        let shown = lesson_choices(&lessons, Some(pending), &settings, today, true, None);
         assert_eq!(shown.len(), 2);
         assert_eq!(shown[0].0, Some(original[1].id));
         assert_eq!(shown[1].0, Some(original[2].id));
@@ -683,6 +821,80 @@ mod tests {
             assert_eq!(before.date, after.date);
             assert_eq!(before.body, after.body);
             assert_eq!(before.completed, after.completed);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn initial_date_can_reach_a_past_practice_lesson_without_changing_normal_defaults()
+    -> Result<(), String> {
+        let today = NaiveDate::from_ymd_opt(2026, 11, 10).unwrap();
+        let settings = Settings::default();
+        let practice = Lessons::practice(|| {});
+        practice.store_lesson(
+            parse_lesson("Алгебра", "09.11.2026", "08:00", "08:40", "12")?,
+            None,
+        )?;
+        assert_eq!(
+            initial_lesson_date(&practice, None, &settings, today),
+            today.pred_opt().unwrap()
+        );
+        let data: SchoolData = serde_json::from_value(
+            serde_json::json!({ "lessons": practice.borrow().as_slice(), "pending_homework": [] }),
+        )
+        .map_err(|error| error.to_string())?;
+        let normal = Lessons::new(data);
+        assert_eq!(initial_lesson_date(&normal, None, &settings, today), today);
+        let task = Homework {
+            id: HomeworkId::Pending(99),
+            title: "Алгебра".into(),
+            date: today.pred_opt(),
+            body: "Задание".into(),
+            completed: false,
+        };
+        assert_eq!(
+            initial_lesson_date(&normal, Some(&task), &settings, today),
+            today.pred_opt().unwrap()
+        );
+        practice.store_lesson(
+            parse_lesson("Алгебра", "11.11.2026", "08:00", "08:40", "12")?,
+            None,
+        )?;
+        assert_eq!(
+            initial_lesson_date(&practice, None, &settings, today),
+            today.succ_opt().unwrap()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn date_selection_never_includes_lessons_from_other_days() -> Result<(), String> {
+        let lessons = Lessons::practice(|| {});
+        for date in ["01.01.2026", "10.11.2026", "11.11.2026"] {
+            lessons.store_lesson(parse_lesson("Физика", date, "08:00", "08:40", "23")?, None)?;
+        }
+        let today = NaiveDate::from_ymd_opt(2026, 11, 10).unwrap();
+        let settings = Settings {
+            hide_old_lessons: true,
+            old_lesson_days: 1,
+            ..Settings::default()
+        };
+        for (day, override_filter, count) in [
+            (today, false, 1),
+            (NaiveDate::from_ymd_opt(2026, 1, 1).unwrap(), false, 0),
+            (NaiveDate::from_ymd_opt(2026, 1, 1).unwrap(), true, 1),
+        ] {
+            let choices =
+                lesson_choices(&lessons, None, &settings, today, override_filter, Some(day));
+            assert_eq!(choices.len(), count);
+            for (id, _) in choices {
+                assert!(
+                    lessons
+                        .borrow()
+                        .iter()
+                        .any(|lesson| Some(lesson.id) == id && lesson.date == day)
+                );
+            }
         }
         Ok(())
     }
@@ -699,9 +911,9 @@ mod tests {
             ..Settings::default()
         };
         let today = lessons.borrow()[0].date + chrono::Duration::days(15);
-        let hidden = lesson_choices(&lessons, None, &settings, today, false);
+        let hidden = lesson_choices(&lessons, None, &settings, today, false, None);
         assert_eq!(hidden, vec![(None, "Урока ещё нет".to_string())]);
-        let shown = lesson_choices(&lessons, None, &settings, today, true);
+        let shown = lesson_choices(&lessons, None, &settings, today, true, None);
         assert_eq!(shown.len(), 2);
         assert_eq!(shown[0].0, Some(lessons.borrow()[0].id));
         assert_eq!(shown[1].0, None);

@@ -81,44 +81,114 @@ fn latest() -> Result<Release, String> {
     Ok(release)
 }
 
-pub fn section(
+pub fn indicator(
     automatic: bool,
     on_change: impl Fn(bool) -> Result<(), String> + 'static,
-) -> gtk::Box {
-    let root = column(12);
-    root.add_css_class("settings-section");
-    root.append(&text("Обновления", "settings-title"));
-    root.append(&text(&format!("Установлена версия {VERSION}"), "section"));
-    let automatic_check = gtk::CheckButton::new();
-    automatic_check.set_child(Some(&text("Проверять обновления автоматически", "section")));
+) -> gtk::MenuButton {
+    let indicator = gtk::MenuButton::new();
+    indicator.set_direction(gtk::ArrowType::Up);
+    let icon = gtk::DrawingArea::new();
+    icon.set_content_width(16);
+    icon.set_content_height(16);
+    icon.set_halign(gtk::Align::Center);
+    icon.set_valign(gtk::Align::Center);
+    icon.set_draw_func(|icon, context, _, _| {
+        let color = icon.style_context().color();
+        context.set_source_rgba(
+            color.red().into(),
+            color.green().into(),
+            color.blue().into(),
+            color.alpha().into(),
+        );
+        context.set_line_width(1.7);
+        context.set_line_cap(gtk::cairo::LineCap::Round);
+        context.set_line_join(gtk::cairo::LineJoin::Round);
+        context.move_to(8.0, 2.0);
+        context.line_to(8.0, 10.0);
+        context.move_to(4.5, 6.5);
+        context.line_to(8.0, 10.0);
+        context.line_to(11.5, 6.5);
+        context.move_to(3.0, 11.0);
+        context.line_to(3.0, 14.0);
+        context.line_to(13.0, 14.0);
+        context.line_to(13.0, 11.0);
+        let _ = context.stroke();
+    });
+    indicator.set_child(Some(&icon));
+    indicator.set_tooltip_text(Some("Обновления приложения"));
+    indicator.add_css_class("circular");
+    indicator.add_css_class("flat");
+    indicator.add_css_class("update-indicator");
+    indicator.set_halign(gtk::Align::Start);
+    indicator.set_valign(gtk::Align::Center);
+    let popover = gtk::Popover::new();
+    popover.set_has_arrow(false);
+    popover.add_css_class("updates-popover");
+    popover.set_halign(gtk::Align::Start);
+    popover.set_offset(0, -4);
+    let root = column(10);
+    root.set_width_request(272);
+    crate::margins(&root, 16);
+    root.add_css_class("update-card");
+    popover.set_child(Some(&root));
+    indicator.set_popover(Some(&popover));
+    let heading = gtk::Box::new(gtk::Orientation::Horizontal, 12);
+    let title = text("Обновления", "settings-title");
+    title.set_hexpand(true);
+    heading.append(&title);
+    let check = gtk::Button::from_icon_name("view-refresh-symbolic");
+    check.add_css_class("flat");
+    check.add_css_class("circular");
+    check.set_tooltip_text(Some("Проверить обновления"));
+    heading.append(&check);
+    root.append(&heading);
+    root.append(&text(&format!("Версия {VERSION}"), "section"));
+    let automatic_row = gtk::Box::new(gtk::Orientation::Horizontal, 12);
+    let automatic_label = text("Автопроверка", "section");
+    automatic_label.set_hexpand(true);
+    let automatic_check = gtk::Switch::new();
+    automatic_check.set_valign(gtk::Align::Center);
+    automatic_label.set_mnemonic_widget(Some(&automatic_check));
     automatic_check.set_active(automatic);
-    root.append(&automatic_check);
-    let check = primary("Проверить обновления");
-    check.set_halign(gtk::Align::Start);
-    root.append(&check);
+    automatic_row.append(&automatic_label);
+    automatic_row.append(&automatic_check);
+    root.append(&automatic_row);
     let spinner = gtk::Spinner::new();
     spinner.set_halign(gtk::Align::Start);
     spinner.set_visible(false);
     root.append(&spinner);
     let feedback = text("", "section");
     feedback.set_visible(false);
+    feedback.set_max_width_chars(32);
     root.append(&feedback);
-    let notes = text("", "muted");
-    notes.set_max_width_chars(64);
+    let notes = text("", "section");
+    notes.set_max_width_chars(32);
     let notes_scroll = gtk::ScrolledWindow::new();
     notes_scroll.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Automatic);
     notes_scroll.set_propagate_natural_height(true);
-    notes_scroll.set_max_content_height(180);
+    notes_scroll.set_max_content_height(140);
+    let weak_notes_scroll = notes_scroll.downgrade();
+    let weak_indicator = indicator.downgrade();
+    popover.connect_map(move |_| {
+        if let (Some(notes), Some(indicator)) =
+            (weak_notes_scroll.upgrade(), weak_indicator.upgrade())
+        {
+            let height = indicator
+                .root()
+                .and_then(|root| root.downcast::<gtk::Window>().ok())
+                .map_or(700, |root| root.height());
+            notes.set_max_content_height((height - 300).clamp(40, 140));
+        }
+    });
     notes_scroll.set_child(Some(&notes));
     notes_scroll.set_visible(false);
     let action = primary(if cfg!(windows) {
         "Скачать обновление"
     } else {
-        "Открыть загрузку"
+        "Открыть релиз"
     });
-    action.set_halign(gtk::Align::Start);
+    action.set_halign(gtk::Align::Fill);
     action.set_visible(false);
-    root.append(&action);
     #[cfg(windows)]
     let progress = {
         let progress = gtk::ProgressBar::new();
@@ -128,13 +198,10 @@ pub fn section(
         progress
     };
     root.append(&notes_scroll);
-    #[cfg(not(windows))]
-    root.append(&text(
-        "Новую сборку Flatpak можно скачать и открыть для установки.",
-        "muted",
-    ));
+    root.append(&action);
 
     let view = Rc::new(UpdateView {
+        indicator: indicator.downgrade(),
         check: check.downgrade(),
         action: action.downgrade(),
         spinner: spinner.downgrade(),
@@ -188,21 +255,20 @@ pub fn section(
         }
     });
     let saving = Rc::clone(&view);
-    let reverting = Cell::new(false);
-    automatic_check.connect_toggled(move |button| {
-        if reverting.get() {
+    let saved_automatic = Cell::new(automatic);
+    automatic_check.connect_active_notify(move |button| {
+        if button.is_active() == saved_automatic.get() {
             return;
         }
         match on_change(button.is_active()) {
             Ok(()) => {
+                saved_automatic.set(button.is_active());
                 if button.is_active() {
                     saving.check();
                 }
             }
             Err(error) => {
-                reverting.set(true);
-                button.set_active(!button.is_active());
-                reverting.set(false);
+                button.set_active(saved_automatic.get());
                 saving.message(&format!("Не удалось сохранить настройку: {error}"));
             }
         }
@@ -224,10 +290,11 @@ pub fn section(
     if automatic {
         gtk::glib::idle_add_local_once(move || view.check());
     }
-    root
+    indicator
 }
 
 struct UpdateView {
+    indicator: gtk::glib::WeakRef<gtk::MenuButton>,
     check: gtk::glib::WeakRef<gtk::Button>,
     action: gtk::glib::WeakRef<gtk::Button>,
     spinner: gtk::glib::WeakRef<gtk::Spinner>,
@@ -236,7 +303,7 @@ struct UpdateView {
     notes_scroll: gtk::glib::WeakRef<gtk::ScrolledWindow>,
     #[cfg(windows)]
     progress: gtk::glib::WeakRef<gtk::ProgressBar>,
-    automatic: gtk::glib::WeakRef<gtk::CheckButton>,
+    automatic: gtk::glib::WeakRef<gtk::Switch>,
     busy: Cell<bool>,
     release: RefCell<Option<Release>>,
     #[cfg(windows)]
@@ -257,6 +324,9 @@ fn restore_button_focus(button: &gtk::glib::WeakRef<gtk::Button>, requested: boo
 
 impl UpdateView {
     fn message(&self, value: &str) {
+        if let Some(indicator) = self.indicator.upgrade() {
+            indicator.set_tooltip_text(Some(value));
+        }
         if let Some(feedback) = self.feedback.upgrade() {
             notify(&feedback, value);
         }
@@ -335,10 +405,16 @@ impl UpdateView {
         };
         if version <= current {
             self.message("Установлена последняя версия");
+            if let Some(indicator) = self.indicator.upgrade() {
+                indicator.remove_css_class("update-available");
+            }
             self.release.borrow_mut().take();
             return;
         }
         self.message(&format!("Доступна версия {version}"));
+        if let Some(indicator) = self.indicator.upgrade() {
+            indicator.add_css_class("update-available");
+        }
         if let Some(notes) = self.notes.upgrade() {
             let body: String = release
                 .body
@@ -363,6 +439,37 @@ impl UpdateView {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    #[ignore = "Нужен графический сеанс; запускать отдельно с --ignored --test-threads=1"]
+    fn failed_update_preference_save_reverts_once() {
+        adw::init().unwrap();
+        let attempts = Rc::new(Cell::new(0));
+        let recorded = Rc::clone(&attempts);
+        let indicator = indicator(false, move |_| {
+            recorded.set(recorded.get() + 1);
+            Err("Нет доступа для записи".into())
+        });
+        let mut widgets = vec![indicator.popover().unwrap().upcast::<gtk::Widget>()];
+        let mut automatic = None;
+        while let Some(widget) = widgets.pop() {
+            if let Some(switch) = widget.downcast_ref::<gtk::Switch>() {
+                automatic = Some(switch.clone());
+                break;
+            }
+            let mut child = widget.first_child();
+            while let Some(current) = child {
+                child = current.next_sibling();
+                widgets.push(current);
+            }
+        }
+        let automatic = automatic.expect("Нет переключателя автопроверки");
+        for expected in [1, 2] {
+            automatic.set_active(true);
+            assert!(!automatic.is_active());
+            assert_eq!(attempts.get(), expected);
+        }
+    }
 
     #[test]
     fn release_versions_are_compared_numerically_and_preview_tags_are_rejected() {

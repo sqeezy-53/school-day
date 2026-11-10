@@ -18,7 +18,6 @@ use schedule::schedule_page;
 
 const APP_ID: &str = "io.github.sqeezy_53.school-day";
 
-// оформление
 const CSS: &str = include_str!("style.css");
 
 fn main() -> gtk::glib::ExitCode {
@@ -145,15 +144,22 @@ fn build_window(app: &adw::Application) {
                 let content = page(title);
                 content.append(&text(
                     &format!("Не удалось загрузить уроки: {error}"),
-                    "muted",
+                    "form-error",
                 ));
                 pages.add_named(&content, Some(name));
             }
             false
         }
     };
-    pages.add_named(&settings::settings_page(&status, &brand), Some("settings"));
-    let navigation = gtk::Box::new(gtk::Orientation::Horizontal, 4);
+    let service = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+    service.add_css_class("service-bar");
+    pages.add_named(
+        &settings::settings_page(&status, &brand, &service),
+        Some("settings"),
+    );
+    let navigation = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+    navigation.add_css_class("linked");
+    navigation.add_css_class("navigation");
     header.set_title_widget(Some(&navigation));
     let compact = adw::Breakpoint::new(adw::BreakpointCondition::new_length(
         adw::BreakpointConditionLengthType::MaxWidth,
@@ -178,7 +184,6 @@ fn build_window(app: &adw::Application) {
         compact.add_setter(&label, "visible", Some(&false.to_value()));
         row.append(&label);
         button.set_child(Some(&row));
-        button.add_css_class("flat");
         button.add_css_class("nav");
         if let Some(ref leader) = first {
             button.set_group(Some(leader));
@@ -223,6 +228,7 @@ fn build_window(app: &adw::Application) {
     });
     root.append(&scroll);
     root.append(undo.widget());
+    root.append(&service);
     let overlay = gtk::Overlay::new();
     overlay.set_child(Some(&root));
     compact.add_setter(
@@ -350,12 +356,12 @@ fn margins(widget: &impl IsA<gtk::Widget>, size: i32) {
 }
 
 fn page(title: &str) -> gtk::Box {
-    let page = column(24);
+    let page = column(32);
     page.append(&text(title, "title"));
     page
 }
 
-fn empty_state(icon: &str, title: &str, description: &str) -> gtk::Box {
+fn empty_state(icon: &str, title: &str) -> gtk::Box {
     let panel = column(12);
     panel.add_css_class("panel");
     let image = gtk::Image::from_icon_name(icon);
@@ -363,12 +369,10 @@ fn empty_state(icon: &str, title: &str, description: &str) -> gtk::Box {
     image.add_css_class("empty-icon");
     image.set_margin_top(12);
     panel.append(&image);
-    for (value, style) in [(title, "section"), (description, "muted")] {
-        let label = text(value, style);
-        label.set_justify(gtk::Justification::Center);
-        label.set_halign(gtk::Align::Center);
-        panel.append(&label);
-    }
+    let label = text(title, "section");
+    label.set_justify(gtk::Justification::Center);
+    label.set_halign(gtk::Align::Center);
+    panel.append(&label);
     panel
 }
 

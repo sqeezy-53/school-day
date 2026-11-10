@@ -5,9 +5,13 @@ headerbar { background: @headerbar_bg_color; box-shadow: none; border-bottom: 1p
 .title { font-size: 23px; font-weight: 600; letter-spacing: -0.4px; }
 .muted { opacity: 0.60; }
 .section { font-size: 13px; font-weight: 500; }
-.nav { padding: 7px 12px; border-radius: 6px; color: alpha(@window_fg_color, 0.65); }
-.nav:checked { background: alpha(@window_fg_color, 0.10); color: @window_fg_color; }
-.nav:hover { background: alpha(@window_fg_color, 0.07); }
+.navigation { padding: 3px; border-radius: 10px; background: alpha(@headerbar_fg_color, 0.06); border: 1px solid alpha(@headerbar_fg_color, 0.10); }
+.navigation button.nav { padding: 7px 12px; border: none; border-radius: 7px; background: transparent; color: alpha(@headerbar_fg_color, 0.70); }
+.navigation button.nav:hover { background: alpha(@headerbar_fg_color, 0.07); }
+.navigation button.nav:checked { background: alpha(@window_fg_color, 0.12); color: @window_fg_color; box-shadow: 0 1px 3px alpha(black, 0.14); }
+.navigation button.nav label, .navigation button.nav image { color: alpha(@window_fg_color, 0.70); }
+.navigation button.nav:checked label, .navigation button.nav:checked image { color: @window_fg_color; }
+.navigation button.nav:focus-visible { outline: 2px solid @accent_bg_color; outline-offset: -2px; }
 .panel { padding: 20px 0; border-top: 1px solid alpha(@window_fg_color, 0.10); }
 .empty-icon { opacity: 0.55; }
 button { box-shadow: none; }
@@ -20,6 +24,33 @@ entry:focus-within { border-color: alpha(@window_fg_color, 0.55); }
 .homework-editor:focus-within { border-color: alpha(@window_fg_color, 0.55); }
 .undo-bar { padding: 8px 16px; border-top: 1px solid alpha(@window_fg_color, 0.15); background: @headerbar_bg_color; }
 .status { opacity: 0.80; padding-top: 12px; border-top: 1px solid alpha(@window_fg_color, 0.10); }
-.settings-section { padding-top: 20px; border-top: 1px solid alpha(@window_fg_color, 0.10); }
+.settings-section { margin-top: 16px; padding-top: 32px; border-top: 1px solid alpha(@window_fg_color, 0.10); }
 .settings-title { font-size: 16px; font-weight: 600; }
-.bell-table { padding: 12px; background: @card_bg_color; border: 1px solid alpha(@window_fg_color, 0.10); border-radius: 10px; }
+.bell-table { padding: 16px; background: @card_bg_color; border: 1px solid alpha(@window_fg_color, 0.10); border-radius: 10px; }
+
+.settings-link { margin-top: 16px; padding: 14px; border-radius: 10px; background: @card_bg_color; border: 1px solid alpha(@window_fg_color, 0.10); }
+
+.service-bar { padding: 8px 16px; }
+.update-indicator > button { min-width: 32px; min-height: 32px; padding: 0; border-radius: 999px; }
+.update-indicator.update-available > button { color: @accent_bg_color; background: alpha(@accent_bg_color, 0.18); box-shadow: inset 0 0 0 1px alpha(@accent_bg_color, 0.55); }
+
+.tutorial-card {
+    padding: 20px;
+    border-radius: 16px;
+    border: 1px solid alpha(@window_fg_color, 0.16);
+    background: mix(@window_bg_color, @window_fg_color, 0.08);
+    color: @window_fg_color;
+    box-shadow: 0 8px 24px alpha(black, 0.30);
+}
+.tutorial-kicker { color: @window_fg_color; font-size: 12px; font-weight: 700; }
+.tutorial-title { font-size: 21px; font-weight: 700; }
+.tutorial-description { color: alpha(@window_fg_color, 0.82); }
+.tutorial-actions button { border-radius: 8px; min-width: 0; padding: 6px 8px; }
+.compact-layout .tutorial-card { padding: 12px; }
+.compact-layout .tutorial-title { font-size: 18px; }
+
+.updates-popover { opacity: 1; transition: none; animation: none; }
+.updates-popover > contents { border-radius: 14px; transition: none; animation: none; }
+.update-card, .update-card label, .update-card image { color: @popover_fg_color; }
+.update-card button.primary { background: @accent_bg_color; color: @accent_fg_color; border: none; }
+.update-card button.primary label { color: @accent_fg_color; }

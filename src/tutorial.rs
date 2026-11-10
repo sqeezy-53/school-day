@@ -12,36 +12,10 @@ const CARD_WIDTH: i32 = 360;
 const EDGE: i32 = 14;
 const GAP: i32 = 20;
 
-const CSS: &str = r#"
-.tutorial-card {
-    padding: 20px;
-    border-radius: 16px;
-    border: 1px solid alpha(@window_fg_color, 0.16);
-    background: mix(@window_bg_color, @window_fg_color, 0.08);
-    color: @window_fg_color;
-    box-shadow: 0 8px 24px alpha(black, 0.30);
-}
-.tutorial-icon {
-    padding: 9px;
-    border-radius: 10px;
-    color: @window_fg_color;
-    background: alpha(@window_fg_color, 0.10);
-}
-.tutorial-kicker { color: @window_fg_color; font-size: 12px; font-weight: 700; }
-.tutorial-title { font-size: 21px; font-weight: 700; }
-.tutorial-description { color: alpha(@window_fg_color, 0.82); }
-.tutorial-actions button { border-radius: 8px; min-width: 0; padding: 6px 8px; }
-.compact-layout .tutorial-card { padding: 12px; }
-.compact-layout .tutorial-icon { padding: 5px; }
-.compact-layout .tutorial-title { font-size: 18px; }
-"#;
-
 #[derive(Clone, Copy)]
 pub(crate) enum Anchor {
     Date,
-    Today,
     AddLesson,
-    EditLesson,
     AddHomework,
     CompleteHomework,
     Theme,
@@ -52,9 +26,7 @@ impl Anchor {
     fn class(self) -> &'static str {
         match self {
             Self::Date => "tour-date",
-            Self::Today => "tour-today",
             Self::AddLesson => "tour-add-lesson",
-            Self::EditLesson => "tour-edit-lesson",
             Self::AddHomework => "tour-add-homework",
             Self::CompleteHomework => "tour-complete-homework",
             Self::Theme => "tour-theme",
@@ -84,7 +56,6 @@ impl Anchor {
 struct Step {
     tab: usize,
     anchor: Option<Anchor>,
-    icon: &'static str,
     title: &'static str,
     description: &'static str,
 }
@@ -92,74 +63,52 @@ struct Step {
 const WELCOME: Step = Step {
     tab: 0,
     anchor: None,
-    icon: "help-browser-symbolic",
-    title: "Добро пожаловать!",
-    description: "Давайте познакомимся с расписанием, домашними заданиями и настройками программы.",
+    title: "Короткое знакомство",
+    description: "Добавим пробный урок и ДЗ. Ваши данные останутся без изменений.",
 };
 
 const STEPS: &[Step] = &[
     Step {
         tab: 0,
         anchor: Some(Anchor::Date),
-        icon: "x-office-calendar-symbolic",
-        title: "Выберите дату",
-        description: "Нажмите на дату, чтобы выбрать нужный день в календаре.",
-    },
-    Step {
-        tab: 0,
-        anchor: Some(Anchor::Today),
-        icon: "go-jump-today-symbolic",
-        title: "Вернитесь к сегодняшнему дню",
-        description: "Нажмите «Сегодня», чтобы быстро вернуться к текущей дате.",
+        title: "Начните с нужного дня",
+        description: "Выберите день в календаре.",
     },
     Step {
         tab: 0,
         anchor: Some(Anchor::AddLesson),
-        icon: "list-add-symbolic",
-        title: "Добавьте урок",
-        description: "Нажмите «Добавить урок» и укажите предмет и кабинет.",
-    },
-    Step {
-        tab: 0,
-        anchor: Some(Anchor::EditLesson),
-        icon: "document-edit-symbolic",
-        title: "Редактируйте уроки",
-        description: "Нажмите на карандаш рядом с уроком, чтобы изменить его данные или добавить домашнее задание.",
-    },
-    Step {
-        tab: 1,
-        anchor: None,
-        icon: "document-edit-symbolic",
-        title: "Домашние задания",
-        description: "Здесь собраны все домашние задания. Вы можете просматривать, добавлять и отмечать выполненные.",
+        title: "Создайте первый урок",
+        description: "Введите предмет и кабинет, затем сохраните урок.",
     },
     Step {
         tab: 1,
         anchor: Some(Anchor::AddHomework),
-        icon: "list-add-symbolic",
-        title: "Добавьте задание",
-        description: "Нажмите «Добавить ДЗ», выберите урок, напишите задание и сохраните.",
+        title: "Запишите домашнее задание",
+        description: "Выберите урок, напишите задание и сохраните.",
     },
     Step {
         tab: 1,
         anchor: Some(Anchor::CompleteHomework),
-        icon: "object-select-symbolic",
-        title: "Отмечайте выполненное",
-        description: "Нажмите на галочку рядом с заданием, чтобы отметить его выполненным. Повторное нажатие снимет отметку.",
+        title: "Отметьте результат",
+        description: "Отметьте галочку у задания.",
     },
     Step {
         tab: 2,
         anchor: Some(Anchor::Theme),
-        icon: "preferences-desktop-appearance-symbolic",
-        title: "Настройте оформление",
-        description: "Выберите светлую, тёмную или автоматическую тему. Автоматическая тема меняется по заданному времени.",
+        title: "Выберите своё оформление",
+        description: "Здесь выбирается светлая, тёмная или автоматическая тема.",
     },
     Step {
         tab: 2,
         anchor: Some(Anchor::Bells),
-        icon: "alarm-symbolic",
-        title: "Настройте расписание звонков",
-        description: "Укажите начало занятий, длительность уроков и перемен. Программа будет учитывать их при добавлении уроков.",
+        title: "Проверьте звонки",
+        description: "Здесь настраивается время уроков и перемен.",
+    },
+    Step {
+        tab: 1,
+        anchor: None,
+        title: "Можно начинать",
+        description: "Учебные записи удалятся после выхода.",
     },
 ];
 
@@ -194,12 +143,10 @@ struct Tour {
     remembered: Cell<bool>,
     highlight: gtk::DrawingArea,
     card: gtk::Box,
-    icon: gtk::Image,
     kicker: gtk::Label,
     title: gtk::Label,
     description: gtk::Label,
     instructions_scroll: gtk::ScrolledWindow,
-    hint: gtk::Label,
     progress: gtk::ProgressBar,
     back: gtk::Button,
     next: gtk::Button,
@@ -215,38 +162,25 @@ pub fn install(
     offer_on_start: bool,
 ) {
     let progress_on_disk = storage::load_json(PROGRESS_FILE, |_: &mut bool| Ok(()));
-    let css = gtk::CssProvider::new();
-    css.load_from_data(CSS);
-    gtk::style_context_add_provider_for_display(
-        &gtk::prelude::WidgetExt::display(window),
-        &css,
-        gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
-    );
-
     let highlight = gtk::DrawingArea::new();
     highlight.set_visible(false);
     overlay.add_overlay(&highlight);
 
-    let card = column(12);
+    let card = column(8);
     card.add_css_class("tutorial-card");
     card.set_visible(false);
-    let header = gtk::Box::new(gtk::Orientation::Horizontal, 10);
-    let icon = gtk::Image::new();
-    icon.set_pixel_size(20);
-    icon.add_css_class("tutorial-icon");
+    let header = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+    let title = text("", "tutorial-title");
+    title.set_hexpand(true);
     let kicker = text("", "tutorial-kicker");
     kicker.set_wrap(false);
-    header.append(&icon);
+    kicker.set_valign(gtk::Align::Center);
+    header.append(&title);
     header.append(&kicker);
-
-    let title = text("", "tutorial-title");
     let description = text("", "tutorial-description");
-    let hint = text("", "muted");
-    let instructions = column(12);
+    let instructions = column(8);
     instructions.append(&header);
-    instructions.append(&title);
     instructions.append(&description);
-    instructions.append(&hint);
     let instructions_scroll = gtk::ScrolledWindow::new();
     instructions_scroll.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Automatic);
     instructions_scroll.set_overlay_scrolling(false);
@@ -289,12 +223,10 @@ pub fn install(
         remembered: Cell::new(matches!(progress_on_disk, Ok(Some(true)))),
         highlight,
         card,
-        icon,
         kicker,
         title,
         description,
         instructions_scroll,
-        hint,
         progress,
         back,
         next,
@@ -371,6 +303,15 @@ pub fn install(
         ) {
             return glib::Propagation::Proceed;
         }
+        if let Some(focus) = tour
+            .window
+            .upgrade()
+            .and_then(|window| GtkWindowExt::focus(&window))
+            && !focus.is_ancestor(&tour.card)
+            && focus != tour.card.clone().upcast::<gtk::Widget>()
+        {
+            return glib::Propagation::Proceed;
+        }
         match key {
             gdk::Key::Escape => tour.finish(),
             gdk::Key::Left => tour.previous(),
@@ -390,7 +331,7 @@ pub fn install(
         });
     }
     let action = gio::SimpleAction::new("tutorial", None);
-    action.connect_activate(move |_, _| tour.open(Screen::Step(0)));
+    action.connect_activate(move |_, _| tour.open(Screen::Welcome));
     window.add_action(&action);
 }
 
@@ -428,12 +369,7 @@ impl Tour {
         }
         self.screen.set(Some(screen));
         let (step, position, previous, next) = match screen {
-            Screen::Welcome => (
-                &WELCOME,
-                format!("Короткое обучение · {} шагов", STEPS.len()),
-                false,
-                "Начать",
-            ),
+            Screen::Welcome => (&WELCOME, format!("{} шагов", STEPS.len()), false, "Начать"),
             Screen::Step(index) => {
                 let next = if index + 1 == STEPS.len() {
                     "Готово"
@@ -442,8 +378,8 @@ impl Tour {
                 };
                 (
                     &STEPS[index],
-                    format!("Шаг {} из {}", index + 1, STEPS.len()),
-                    index > 0,
+                    format!("{} / {}", index + 1, STEPS.len()),
+                    true,
                     next,
                 )
             }
@@ -455,32 +391,21 @@ impl Tour {
             match step.tab {
                 0 => pages.set_visible_child(&practice.schedule),
                 1 => pages.set_visible_child(&practice.homework),
-                _ => pages.set_visible_child_name("settings"),
+                _ => {
+                    pages.set_visible_child_name("settings");
+                    if let Some(settings) = pages.visible_child() {
+                        let _ = settings.activate_action("settings.main", None);
+                    }
+                }
             }
         }
         if let Some(scroll) = self.scroll.upgrade() {
             scroll.vadjustment().set_value(0.0);
         }
-        self.icon.set_icon_name(Some(step.icon));
         self.kicker.set_text(&position);
         self.title.set_text(step.title);
         self.description.set_text(step.description);
         let exercise = self.exercise();
-        let hint = match (screen, exercise) {
-            (Screen::Welcome, _) => "Урок и ДЗ из обучения исчезнут после выхода.",
-            (_, Some(Anchor::AddLesson)) => {
-                "Введи, например, «Математика» и кабинет «12», затем сохрани урок."
-            }
-            (_, Some(Anchor::AddHomework)) => {
-                "Для примера запиши «Решить задачу № 4» и сохрани задание."
-            }
-            (_, Some(Anchor::CompleteHomework)) => {
-                "Нажми на выделенную галочку или кнопку «Попробовать»."
-            }
-            _ => "",
-        };
-        self.hint.set_text(hint);
-        self.hint.set_visible(!hint.is_empty());
         self.instructions_scroll.vadjustment().set_value(0.0);
         self.back.set_visible(previous);
         self.next.set_label(if exercise.is_some() {
@@ -509,10 +434,12 @@ impl Tour {
     }
 
     fn previous(self: &Rc<Self>) {
-        if let Some(Screen::Step(index)) = self.screen.get()
-            && index > 0
-        {
-            self.show(Screen::Step(index - 1));
+        if let Some(Screen::Step(index)) = self.screen.get() {
+            self.show(if index == 0 {
+                Screen::Welcome
+            } else {
+                Screen::Step(index - 1)
+            });
         }
     }
 
@@ -608,7 +535,7 @@ impl Tour {
                     menu.popup();
                 }
             }
-            Anchor::Today | Anchor::AddLesson | Anchor::EditLesson | Anchor::AddHomework => {
+            Anchor::AddLesson | Anchor::AddHomework => {
                 if let Ok(button) = target.downcast::<gtk::Button>() {
                     button.emit_clicked();
                 }
@@ -674,10 +601,12 @@ impl Tour {
             return None;
         };
         let step = &STEPS[index];
-        let target = step.anchor.and_then(|anchor| {
-            let page = self.pages.upgrade()?.visible_child()?;
-            anchor.find(&page)
-        });
+        let anchor = step.anchor?;
+        let target = self
+            .pages
+            .upgrade()
+            .and_then(|pages| pages.visible_child())
+            .and_then(|page| anchor.find(&page));
         Some(target.unwrap_or_else(|| self.tabs[step.tab].clone().upcast()))
     }
 
@@ -769,9 +698,6 @@ impl Tour {
             context.set_line_width(2.0);
             spotlight_path(context, target);
             let _ = context.stroke();
-            if let Some(card) = self.card.compute_bounds(&overlay) {
-                draw_pointer(context, target, card);
-            }
         }
     }
 }
@@ -789,51 +715,4 @@ fn spotlight_path(context: &cairo::Context, target: graphene::Rect) {
     context.arc(x + radius, bottom - radius, radius, quarter, 2.0 * quarter);
     context.arc(x + radius, y + radius, radius, 2.0 * quarter, 3.0 * quarter);
     context.close_path();
-}
-
-fn draw_pointer(context: &cairo::Context, target: graphene::Rect, card: graphene::Rect) {
-    let (tx, ty, tr, tb) = (
-        target.x(),
-        target.y(),
-        target.x() + target.width(),
-        target.y() + target.height(),
-    );
-    let (cx, cy, cr, cb) = (
-        card.x(),
-        card.y(),
-        card.x() + card.width(),
-        card.y() + card.height(),
-    );
-    let x = (tx + tr) / 2.0;
-    let y = (ty + tb) / 2.0;
-    let (tip, base, offset) = if cy >= tb + 12.0 || cb <= ty - 12.0 {
-        let (tip_y, base_y) = if cy > tb {
-            (tb + 7.0, cy + 1.0)
-        } else {
-            (ty - 7.0, cb - 1.0)
-        };
-        (
-            (x, tip_y),
-            (x.clamp(cx + 18.0, cr - 18.0), base_y),
-            (6.0, 0.0),
-        )
-    } else if cx >= tr + 12.0 || cr <= tx - 12.0 {
-        let (tip_x, base_x) = if cx > tr {
-            (tr + 7.0, cx + 1.0)
-        } else {
-            (tx - 7.0, cr - 1.0)
-        };
-        (
-            (tip_x, y),
-            (base_x, y.clamp(cy + 18.0, cb - 18.0)),
-            (0.0, 6.0),
-        )
-    } else {
-        return;
-    };
-    context.move_to(tip.0.into(), tip.1.into());
-    context.line_to((base.0 - offset.0).into(), (base.1 - offset.1).into());
-    context.line_to((base.0 + offset.0).into(), (base.1 + offset.1).into());
-    context.close_path();
-    let _ = context.fill();
 }

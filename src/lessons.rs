@@ -1,5 +1,6 @@
-use chrono::{NaiveDate, NaiveTime};
+use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 use std::cell::{Cell, Ref, RefCell};
+use std::collections::HashMap;
 use std::rc::Rc;
 
 use crate::forms::{HOMEWORK_LIMIT, SUBJECT_LIMIT, length_error};
@@ -164,6 +165,15 @@ pub struct Lesson {
 }
 
 impl Lesson {
+    pub fn label(&self) -> String {
+        format!(
+            "{} · {} в {}",
+            self.title,
+            self.date.format("%d.%m.%Y"),
+            self.time.format("%H:%M")
+        )
+    }
+
     pub fn new(
         title: &str,
         date: NaiveDate,
@@ -332,36 +342,75 @@ impl SchoolData {
         Ok(HomeworkId::Linked(lesson_id))
     }
 
-    fn auto_attach(&mut self, title: &str, date: NaiveDate) -> Option<HomeworkId> {
-        let mut lessons = self
-            .lessons
-            .iter()
-            .filter(|lesson| lesson.date == date && same_subject(&lesson.title, title));
-        let lesson = lessons.next()?;
-        if lessons.next().is_some() || !lesson.homework.trim().is_empty() {
-            return None;
-        }
-        let id = lesson.id;
-        let mut tasks = self
+    fn auto_attach(
+        &mut self,
+        now: NaiveDateTime,
+        only_task: Option<RecordId>,
+    ) -> Vec<(RecordId, RecordId)> {
+        let proposals: Vec<_> = self
             .pending_homework
             .iter()
-            .enumerate()
-            .filter(|(_, task)| task.date == Some(date) && same_subject(&task.title, title));
-        let (index, _) = tasks.next()?;
-        if tasks.next().is_some() {
-            return None;
+            .filter_map(|task| {
+                let matches = |lesson: &&Lesson| same_subject(&lesson.title, &task.title);
+                let target = if let Some(date) = task.date {
+                    let mut candidates = self
+                        .lessons
+                        .iter()
+                        .filter(|lesson| lesson.date == date)
+                        .filter(matches);
+                    let lesson = candidates.next()?;
+                    if candidates.next().is_some()
+                        || lesson.date.and_time(lesson.time) <= now
+                        || !lesson.homework.trim().is_empty()
+                    {
+                        return None;
+                    }
+                    lesson
+                } else {
+                    self.lessons
+                        .iter()
+                        .filter(|lesson| {
+                            lesson.date.and_time(lesson.time) > now
+                                && lesson.homework.trim().is_empty()
+                        })
+                        .filter(matches)
+                        .min_by_key(|lesson| (lesson.date, lesson.time))?
+                };
+                Some((task.id, target.id))
+            })
+            .collect();
+        let mut counts = HashMap::new();
+        for &(_, lesson) in &proposals {
+            *counts.entry(lesson).or_insert(0usize) += 1;
         }
-        self.attach(index, id).ok()
+        let mut attached = Vec::new();
+        for &(task, lesson) in &proposals {
+            if only_task.is_some_and(|wanted| task != wanted) {
+                continue;
+            }
+            if counts.get(&lesson) != Some(&1) {
+                continue;
+            }
+            if let Ok(index) = self.pending_index(task)
+                && self.attach(index, lesson).is_ok()
+            {
+                attached.push((task, lesson));
+            }
+        }
+        attached
     }
 }
 
 impl Lessons {
-    pub fn store_lesson(&self, mut lesson: Lesson, id: Option<RecordId>) -> Result<bool, String> {
+    pub fn store_lesson(
+        &self,
+        mut lesson: Lesson,
+        id: Option<RecordId>,
+    ) -> Result<Vec<RecordId>, String> {
         lesson.id = id.unwrap_or_else(|| self.next_id());
         validate_lesson(&lesson)?;
         let mut data = self.0.data.borrow().clone();
         check_slot(&data.lessons, &lesson)?;
-        let (title, date) = (lesson.title.clone(), lesson.date);
         if let Some(id) = id {
             *data.lesson_mut(id)? = lesson;
         } else {
@@ -369,7 +418,11 @@ impl Lessons {
         }
         data.lessons
             .sort_by_key(|lesson| (lesson.date, lesson.time));
-        let attached = data.auto_attach(&title, date).is_some();
+        let attached = data
+            .auto_attach(chrono::Local::now().naive_local(), None)
+            .into_iter()
+            .map(|(_, lesson)| lesson)
+            .collect();
         self.replace(data)?;
         Ok(attached)
     }
@@ -558,11 +611,26 @@ impl Lessons {
             }
             data.attach(index, target)?
         } else {
-            date.and_then(|date| data.auto_attach(title, date))
-                .unwrap_or(pending)
+            data.auto_attach(
+                chrono::Local::now().naive_local(),
+                Some(data.pending_homework[index].id),
+            )
+            .into_iter()
+            .find(|(task, _)| pending == HomeworkId::Pending(*task))
+            .map_or(pending, |(_, lesson)| HomeworkId::Linked(lesson))
         };
         self.replace(data)?;
         Ok(saved)
+    }
+
+    pub fn attachment_notice(&self, ids: &[RecordId]) -> String {
+        let data = self.0.data.borrow();
+        let labels: Vec<_> = ids
+            .iter()
+            .filter_map(|id| data.lessons.iter().find(|lesson| lesson.id == *id))
+            .map(Lesson::label)
+            .collect();
+        format!("ДЗ прикреплено: {}", labels.join("; "))
     }
 
     pub fn delete_homework(&self, id: HomeworkId) -> Result<Removed, String> {
@@ -657,8 +725,9 @@ mod tests {
     #[test]
     fn dated_homework_attaches_when_the_lesson_appears_and_keeps_completion() {
         let items = Lessons::practice(|| {});
-        let lesson =
+        let mut lesson =
             parse_lesson("Физика  и астрономия", "06.11.2026", "08:00", "08:40", "23").unwrap();
+        lesson.date = chrono::Local::now().date_naive().succ_opt().unwrap();
         let task = items
             .save_pending(
                 None,
@@ -673,9 +742,9 @@ mod tests {
             date: lesson.date.succ_opt().unwrap(),
             ..lesson.clone()
         };
-        assert!(!items.store_lesson(different_day, None).unwrap());
+        assert!(items.store_lesson(different_day, None).unwrap().is_empty());
         assert_eq!(items.homework()[0].id, task);
-        assert!(items.store_lesson(lesson, None).unwrap());
+        assert!(!items.store_lesson(lesson, None).unwrap().is_empty());
         let tasks = items.homework();
         assert_eq!(tasks.len(), 1);
         assert!(matches!(tasks[0].id, HomeworkId::Linked(_)));
@@ -737,9 +806,10 @@ mod tests {
     }
 
     #[test]
-    fn undated_and_duplicate_homework_are_never_attached_automatically() {
+    fn competing_tasks_are_not_assigned_by_insertion_order() {
         let items = Lessons::practice(|| {});
-        let lesson = parse_lesson("Физика", "06.11.2026", "08:00", "08:40", "23").unwrap();
+        let mut lesson = parse_lesson("Физика", "06.11.2026", "08:00", "08:40", "23").unwrap();
+        lesson.date = chrono::Local::now().date_naive().succ_opt().unwrap();
         for (date, body) in [
             (None, "Без даты"),
             (Some(lesson.date), "Первое"),
@@ -752,9 +822,180 @@ mod tests {
                 HomeworkId::Pending(_)
             ));
         }
-        assert!(!items.store_lesson(lesson, None).unwrap());
+        assert!(items.store_lesson(lesson, None).unwrap().is_empty());
         assert_eq!(items.homework().len(), 3);
         assert!(items.borrow()[0].homework.is_empty());
+    }
+
+    #[test]
+    fn undated_homework_uses_the_nearest_free_future_lesson() {
+        let now = NaiveDate::from_ymd_opt(2026, 11, 10)
+            .unwrap()
+            .and_hms_opt(9, 0, 0)
+            .unwrap();
+        let mut data = SchoolData::default();
+        for (id, title, day, start, body) in [
+            (1, "Алгебра", "09.11.2026", "10:00", ""),
+            (2, "Алгебра", "10.11.2026", "08:00", ""),
+            (3, "Алгебра", "10.11.2026", "09:00", ""),
+            (4, "Геометрия", "10.11.2026", "10:00", ""),
+            (5, "Алгебра", "10.11.2026", "11:00", "Занято"),
+            (6, "Алгебра", "10.11.2026", "12:00", ""),
+            (7, "Алгебра", "11.11.2026", "08:00", ""),
+        ] {
+            let time = NaiveTime::parse_from_str(start, "%H:%M").unwrap();
+            let mut lesson = Lesson::new(
+                title,
+                NaiveDate::parse_from_str(day, "%d.%m.%Y").unwrap(),
+                time,
+                time + chrono::Duration::minutes(40),
+                "12",
+            )
+            .unwrap();
+            lesson.id = id;
+            lesson.homework = body.into();
+            data.lessons.push(lesson);
+        }
+        data.pending_homework.push(PendingHomework {
+            id: 8,
+            title: " АЛГЕБРА ".into(),
+            date: None,
+            body: "Задача 4".into(),
+            completed: true,
+        });
+        assert_eq!(data.auto_attach(now, None), vec![(8, 6)]);
+        assert!(data.pending_homework.is_empty());
+        assert_eq!(data.lessons[4].homework, "Занято");
+        assert_eq!(data.lessons[5].homework, "Задача 4");
+        assert!(data.lessons[5].homework_completed);
+        assert!(data.auto_attach(now, None).is_empty());
+    }
+
+    #[test]
+    fn explicit_dates_and_ambiguity_are_respected() {
+        let now = NaiveDate::from_ymd_opt(2026, 11, 10)
+            .unwrap()
+            .and_hms_opt(9, 0, 0)
+            .unwrap();
+        let mut data = SchoolData::default();
+        for (id, day, start, end) in [
+            (1, "09.11.2026", "08:00", "08:40"),
+            (2, "11.11.2026", "08:00", "08:40"),
+            (3, "11.11.2026", "09:00", "09:40"),
+            (4, "12.11.2026", "08:00", "08:40"),
+        ] {
+            let mut lesson = parse_lesson("Физика", day, start, end, "23").unwrap();
+            lesson.id = id;
+            data.lessons.push(lesson);
+        }
+        for (id, day) in [(5, 9), (6, 11), (7, 13), (8, 12)] {
+            data.pending_homework.push(PendingHomework {
+                id,
+                title: "Физика".into(),
+                date: NaiveDate::from_ymd_opt(2026, 11, day),
+                body: format!("Задание {id}"),
+                completed: false,
+            });
+        }
+        assert_eq!(data.auto_attach(now, None), vec![(8, 4)]);
+        assert_eq!(
+            data.pending_homework
+                .iter()
+                .map(|task| task.id)
+                .collect::<Vec<_>>(),
+            vec![5, 6, 7]
+        );
+        data.pending_homework[0].date = None;
+        data.pending_homework[1].date = None;
+        assert!(data.auto_attach(now, None).is_empty());
+        assert!(data.lessons[1].homework.is_empty());
+    }
+
+    #[test]
+    fn a_later_schedule_change_attaches_undated_homework_and_preserves_manual_targets() {
+        let items = Lessons::practice(|| {});
+        let today = chrono::Local::now().date_naive();
+        let mut lesson = parse_lesson("Алгебра", "11.11.2026", "08:00", "08:40", "12").unwrap();
+        lesson.date = today.succ_opt().unwrap();
+        let task = items
+            .save_pending(None, "АЛГЕБРА", None, "Задача 1", None)
+            .unwrap();
+        items.set_homework_completed(task, true).unwrap();
+        let mut other = lesson.clone();
+        other.title = "Геометрия".into();
+        assert!(items.store_lesson(other, None).unwrap().is_empty());
+        let id = items.borrow()[0].id;
+        let attached = items.store_lesson(lesson.clone(), Some(id)).unwrap();
+        assert_eq!(attached, vec![id]);
+        assert_eq!(items.homework().len(), 1);
+        assert_eq!(items.homework()[0].id, HomeworkId::Linked(id));
+        assert!(items.homework()[0].completed);
+        let mut later = lesson.clone();
+        later.date = lesson.date.succ_opt().unwrap();
+        items.store_lesson(later, None).unwrap();
+        let later_id = items.borrow()[1].id;
+        let HomeworkId::Pending(pending) = items
+            .save_pending(None, "Алгебра", Some(today), "Вручную", None)
+            .unwrap()
+        else {
+            panic!("Прошедшая дата не должна привязываться");
+        };
+        items
+            .set_homework_completed(HomeworkId::Pending(pending), true)
+            .unwrap();
+        assert_eq!(
+            items
+                .save_pending(
+                    Some(pending),
+                    "Алгебра",
+                    Some(today),
+                    "Вручную",
+                    Some(later_id)
+                )
+                .unwrap(),
+            HomeworkId::Linked(later_id)
+        );
+        let mut earlier = lesson;
+        earlier.time += chrono::Duration::hours(1);
+        earlier.end += chrono::Duration::hours(1);
+        items.store_lesson(earlier, None).unwrap();
+        assert_eq!(items.homework().len(), 2);
+        let manual = items
+            .homework()
+            .into_iter()
+            .find(|task| task.id == HomeworkId::Linked(later_id))
+            .unwrap();
+        assert_eq!(manual.body, "Вручную");
+        assert!(manual.completed);
+    }
+
+    #[test]
+    fn saving_one_pending_task_does_not_silently_attach_another() -> Result<(), String> {
+        let items = Lessons::practice(|| {});
+        let date = chrono::Local::now().date_naive().succ_opt().unwrap();
+        let first = items.save_pending(None, "Алгебра", None, "Первое", None)?;
+        let HomeworkId::Pending(second) =
+            items.save_pending(None, "Алгебра", None, "Второе", None)?
+        else {
+            panic!("Пока нет уроков")
+        };
+        let lesson = Lesson::new(
+            "Алгебра",
+            date,
+            NaiveTime::from_hms_opt(8, 0, 0).unwrap(),
+            NaiveTime::from_hms_opt(8, 40, 0).unwrap(),
+            "12",
+        )?;
+        assert!(items.store_lesson(lesson, None)?.is_empty());
+        items.save_pending(Some(second), "Геометрия", None, "Второе", None)?;
+        assert!(items.borrow()[0].homework.is_empty());
+        assert!(
+            items
+                .homework()
+                .iter()
+                .any(|task| task.id == first && task.body == "Первое")
+        );
+        Ok(())
     }
 
     #[test]
