@@ -8,7 +8,7 @@ pub fn initialize() -> Result<OwnedHandle, String> {
     
 }
 
-pub fn running_guard() -> Result<std::os::windows::io::OwnedHandle, String> {
+pub fn running_guard() -> Result<OwnedHandle, String> {
     use std::os::windows::io::FromRawHandle;
     #[link(name = "kernel32")]
     unsafe extern "system" {
@@ -26,9 +26,13 @@ pub fn running_guard() -> Result<std::os::windows::io::OwnedHandle, String> {
     let check_installing = || {
         let handle = unsafe { OpenMutexW(0x100000, 0, installing.as_ptr()) };
         if handle.is_null() {
-            Ok(())
+            let error = std::io::Error::last_os_error();
+        if error.raw_os_error() == Some(2) {
+            return Ok(());
+        }
+        Err(format!("Не удалось проверить, выполняется ли установка: {}", error))
         } else {
-            let _guard = unsafe { std::os::windows::io::OwnedHandle::from_raw_handle(handle) };
+            let _guard = unsafe { OwnedHandle::from_raw_handle(handle) };
             Err("Выполняется установка «Школьного дня». Дождитесь её завершения и откройте приложение снова.".to_string())
         }
     };
@@ -44,7 +48,7 @@ pub fn running_guard() -> Result<std::os::windows::io::OwnedHandle, String> {
     if handle.is_null() {
         return Err(os_error.to_string());
     }
-    let guard = unsafe { std::os::windows::io::OwnedHandle::from_raw_handle(handle) };
+    let guard = unsafe { OwnedHandle::from_raw_handle(handle) };
 
     if os_error.raw_os_error() == Some(183) {
         return Err("Школьный день уже запущен".to_string());
