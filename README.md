@@ -4,14 +4,14 @@
 
 Бесплатная программа с открытым исходным кодом для управления расписанием уроков и домашними заданиями.
 
-![Расписание](docs/screenshots/schedule.png)
+![Расписание — Школьный день 0.5.0](docs/screenshots/schedule.png)
 
 <details>
 <summary>Ещё скриншоты</summary>
 
-![Домашние задания](docs/screenshots/homework.png)
+![Домашние задания — Школьный день 0.5.0](docs/screenshots/homework.png)
 
-![Настройки](docs/screenshots/settings.png)
+![Настройки — Школьный день 0.5.0](docs/screenshots/settings.png)
 
 </details>
 
