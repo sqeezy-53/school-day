@@ -1,11 +1,10 @@
-use std::os::windows::process::CommandExt;
 use std::os::windows::prelude::OwnedHandle;
+use std::os::windows::process::CommandExt;
 
 pub fn initialize() -> Result<OwnedHandle, String> {
     let guard = running_guard()?;
     prepare_runtime()?;
     Ok(guard)
-    
 }
 
 pub fn running_guard() -> Result<OwnedHandle, String> {
@@ -27,10 +26,13 @@ pub fn running_guard() -> Result<OwnedHandle, String> {
         let handle = unsafe { OpenMutexW(0x100000, 0, installing.as_ptr()) };
         if handle.is_null() {
             let error = std::io::Error::last_os_error();
-        if error.raw_os_error() == Some(2) {
-            return Ok(());
-        }
-        Err(format!("Не удалось проверить, выполняется ли установка: {}", error))
+            if error.raw_os_error() == Some(2) {
+                return Ok(());
+            }
+            Err(format!(
+                "Не удалось проверить, выполняется ли установка: {}",
+                error
+            ))
         } else {
             let _guard = unsafe { OwnedHandle::from_raw_handle(handle) };
             Err("Выполняется установка «Школьного дня». Дождитесь её завершения и откройте приложение снова.".to_string())

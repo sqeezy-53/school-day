@@ -30,7 +30,7 @@ fn main() -> gtk::glib::ExitCode {
             return gtk::glib::ExitCode::FAILURE;
         }
     };
-    
+
     gtk::glib::set_application_name("Школьный день");
     let app = adw::Application::builder().application_id(APP_ID).build();
     app.connect_activate(|app| {
