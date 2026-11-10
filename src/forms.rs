@@ -22,6 +22,22 @@ pub fn error_label(form: &gtk::Box, widget: &impl IsA<gtk::Widget>) -> gtk::Labe
     label
 }
 
+pub fn time_input(maximum: f64, value: u32, label: &str) -> gtk::SpinButton {
+    let spin = gtk::SpinButton::with_range(0.0, maximum, 1.0);
+    spin.set_numeric(true);
+    spin.set_wrap(true);
+    spin.set_width_chars(2);
+    spin.set_tooltip_text(Some(label));
+    spin.set_update_policy(gtk::SpinButtonUpdatePolicy::IfValid);
+    spin.set_value(value as f64);
+    spin.connect_output(|spin| {
+        spin.set_text(&format!("{:02}", spin.value_as_int()));
+        gtk::glib::Propagation::Stop
+    });
+    spin.set_text(&format!("{value:02}"));
+    spin
+}
+
 pub fn homework_editor(height: i32) -> (gtk::ScrolledWindow, gtk::TextView) {
     let editor = gtk::TextView::new();
     editor.set_wrap_mode(gtk::WrapMode::WordChar);

@@ -119,8 +119,8 @@ fn time_field(title: &str, value: NaiveTime) -> (gtk::Box, gtk::SpinButton, gtk:
 
     let row = gtk::Box::new(gtk::Orientation::Horizontal, 6);
 
-    let hour = time_number(23.0, value.hour(), &format!("{title}: часы"));
-    let minute = time_number(59.0, value.minute(), &format!("{title}: минуты"));
+    let hour = forms::time_input(23.0, value.hour(), &format!("{title}: часы"));
+    let minute = forms::time_input(59.0, value.minute(), &format!("{title}: минуты"));
 
     row.append(&hour);
     row.append(&text(":", "muted"));
@@ -129,25 +129,6 @@ fn time_field(title: &str, value: NaiveTime) -> (gtk::Box, gtk::SpinButton, gtk:
     group.append(&row);
 
     (group, hour, minute)
-}
-
-fn time_number(maximum: f64, value: u32, label: &str) -> gtk::SpinButton {
-    let spin = gtk::SpinButton::with_range(0.0, maximum, 1.0);
-    spin.set_numeric(true);
-    spin.set_wrap(true);
-    spin.set_width_chars(2);
-    spin.set_tooltip_text(Some(label));
-    spin.set_update_policy(gtk::SpinButtonUpdatePolicy::IfValid);
-    spin.set_value(value as f64);
-
-    spin.connect_output(|spin| {
-        spin.set_text(&format!("{:02}", spin.value_as_int()));
-        gtk::glib::Propagation::Stop
-    });
-
-    spin.set_text(&format!("{value:02}"));
-
-    spin
 }
 
 pub fn settings_page(status: &gtk::Label, brand: &gtk::Label) -> gtk::Box {

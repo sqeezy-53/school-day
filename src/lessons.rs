@@ -163,6 +163,38 @@ pub struct Lesson {
     pub homework_completed: bool,
 }
 
+impl Lesson {
+    pub fn new(
+        title: &str,
+        date: NaiveDate,
+        time: NaiveTime,
+        end: NaiveTime,
+        room: &str,
+    ) -> Result<Self, String> {
+        let title = title.trim();
+        let room = room.trim();
+        if title.is_empty() {
+            return Err("Введите название предмета".to_string());
+        }
+        if room.is_empty() {
+            return Err("Введите кабинет".to_string());
+        }
+        let lesson = Self {
+            id: 0,
+            title: title.to_string(),
+            date,
+            time,
+            end,
+            room: room.to_string(),
+            homework: String::new(),
+            homework_completed: false,
+        };
+        validate_lesson(&lesson)?;
+        Ok(lesson)
+    }
+}
+
+#[cfg(test)]
 pub fn parse_lesson(
     title: &str,
     date: &str,
@@ -170,33 +202,13 @@ pub fn parse_lesson(
     end: &str,
     room: &str,
 ) -> Result<Lesson, String> {
-    let title = title.trim();
-    let room = room.trim();
-    if title.is_empty() {
-        return Err("Введите название предмета".to_string());
-    }
-    if room.is_empty() {
-        return Err("Введите кабинет".to_string());
-    }
     let date = NaiveDate::parse_from_str(date, "%d.%m.%Y")
         .map_err(|_| "Выберите дату урока".to_string())?;
     let time = NaiveTime::parse_from_str(time, "%H:%M")
         .map_err(|_| "Проверьте время начала".to_string())?;
     let end = NaiveTime::parse_from_str(end, "%H:%M")
         .map_err(|_| "Проверьте время окончания".to_string())?;
-    let lesson = Lesson {
-        id: 0,
-        title: title.to_string(),
-        date,
-        time,
-        end,
-        room: room.to_string(),
-        homework: String::new(),
-        homework_completed: false,
-    };
-
-    validate_lesson(&lesson)?;
-    Ok(lesson)
+    Lesson::new(title, date, time, end, room)
 }
 
 fn validate_lesson(lesson: &Lesson) -> Result<(), String> {
@@ -583,6 +595,51 @@ impl Lessons {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn typed_lesson_creation_preserves_values_and_validation() -> Result<(), String> {
+        let date = NaiveDate::from_ymd_opt(2026, 11, 10).ok_or("Неверная дата теста")?;
+        let start = NaiveTime::from_hms_opt(8, 0, 30).ok_or("Неверное время теста")?;
+        let end = NaiveTime::from_hms_opt(8, 40, 30).ok_or("Неверное время теста")?;
+        let lesson = Lesson::new("  Физика  ", date, start, end, "  23  ")?;
+        assert_eq!(lesson.title, "Физика");
+        assert_eq!(lesson.room, "23");
+        assert_eq!((lesson.date, lesson.time, lesson.end), (date, start, end));
+        assert_eq!(lesson.id, 0);
+        assert!(lesson.homework.is_empty());
+        assert!(!lesson.homework_completed);
+        for (title, room, finish, error) in [
+            (" ", "23", end, "Введите название предмета"),
+            ("Физика", " ", end, "Введите кабинет"),
+            ("Физика\0", "23", end, "Недопустимые символы в данных урока"),
+            (
+                "Физика",
+                "23",
+                start,
+                "Время окончания должно быть позже начала",
+            ),
+        ] {
+            assert_eq!(
+                Lesson::new(title, date, start, finish, room).unwrap_err(),
+                error
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn string_lesson_parsing_keeps_input_errors() {
+        for (date, start, end, error) in [
+            ("31.02.2026", "08:00", "08:40", "Выберите дату урока"),
+            ("10.11.2026", "24:00", "08:40", "Проверьте время начала"),
+            ("10.11.2026", "08:00", "24:00", "Проверьте время окончания"),
+        ] {
+            assert_eq!(
+                parse_lesson("Физика", date, start, end, "23").unwrap_err(),
+                error
+            );
+        }
+    }
 
     #[test]
     fn sorted_validation_allows_adjacent_lessons_and_rejects_overlap() {

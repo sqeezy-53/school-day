@@ -5,7 +5,7 @@ use std::rc::Rc;
 
 use crate::bells::Bell;
 use crate::forms::{self, HOMEWORK_LIMIT, ROOM_LIMIT, SUBJECT_LIMIT};
-use crate::lessons::{HomeworkId, Lesson, Lessons, RecordId, parse_lesson};
+use crate::lessons::{HomeworkId, Lesson, Lessons, RecordId};
 use crate::tutorial::Anchor;
 use crate::undo::UndoHandle;
 
@@ -945,11 +945,11 @@ fn on_add_lesson(
             return;
         }
         let date = selected_date(&date_picker);
-        let result = parse_lesson(
+        let result = Lesson::new(
             title.text().as_str(),
-            &date.format("%d.%m.%Y").to_string(),
-            &start_picker.time().format("%H:%M").to_string(),
-            &end_picker.time().format("%H:%M").to_string(),
+            date,
+            start_picker.time(),
+            end_picker.time(),
             room.text().as_str(),
         )
         .and_then(|mut lesson| {
@@ -1111,6 +1111,7 @@ fn connect_subject_suggestions(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::lessons::parse_lesson;
 
     #[test]
     fn suggests_a_free_interval_between_lessons_before_the_first_bell() {

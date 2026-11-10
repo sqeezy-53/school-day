@@ -247,8 +247,9 @@ pub fn editor(
     let first_group = column(8);
     first_group.append(&text("Первый урок", "section"));
     let first = gtk::Box::new(gtk::Orientation::Horizontal, 6);
-    let hour = clock_input(23.0, initial.first_start.hour(), "Часы начала занятий");
-    let minute = clock_input(59.0, initial.first_start.minute(), "Минуты начала занятий");
+    let hour = crate::forms::time_input(23.0, initial.first_start.hour(), "Часы начала занятий");
+    let minute =
+        crate::forms::time_input(59.0, initial.first_start.minute(), "Минуты начала занятий");
     first.append(&hour);
     first.append(&text(":", "muted"));
     first.append(&minute);
@@ -301,16 +302,5 @@ fn number_input(minimum: f64, maximum: f64, value: u32, label: &str) -> gtk::Spi
     spin.set_update_policy(gtk::SpinButtonUpdatePolicy::IfValid);
     spin.set_tooltip_text(Some(label));
     spin.set_value(value as f64);
-    spin
-}
-
-fn clock_input(maximum: f64, value: u32, label: &str) -> gtk::SpinButton {
-    let spin = number_input(0.0, maximum, value, label);
-    spin.set_wrap(true);
-    spin.connect_output(|spin| {
-        spin.set_text(&format!("{:02}", spin.value_as_int()));
-        gtk::glib::Propagation::Stop
-    });
-    spin.set_text(&format!("{value:02}"));
     spin
 }

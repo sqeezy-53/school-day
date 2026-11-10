@@ -17,7 +17,7 @@ pub struct UndoHandle(Weak<UndoView>);
 impl UndoHandle {
     pub fn offer(&self, lessons: &Lessons, removed: Removed) {
         if let Some(view) = self.0.upgrade() {
-            UndoBar(view).offer(lessons, removed);
+            view.offer(lessons, removed);
         }
     }
 }
@@ -91,20 +91,26 @@ impl UndoBar {
         UndoHandle(Rc::downgrade(&self.0))
     }
 
-    fn offer(&self, lessons: &Lessons, removed: Removed) {
-        let id = self.0.next_id.get();
-        self.0.next_id.set(id + 1);
-        self.0.entries.borrow_mut().push(Entry {
+    pub fn restore(&self) -> bool {
+        self.0.restore()
+    }
+}
+
+impl UndoView {
+    fn offer(self: &Rc<Self>, lessons: &Lessons, removed: Removed) {
+        let id = self.next_id.get();
+        self.next_id.set(id + 1);
+        self.entries.borrow_mut().push(Entry {
             id,
             expires: Instant::now() + WINDOW,
             lessons: lessons.clone(),
             removed,
         });
-        if let Some(status) = self.0.status.upgrade() {
+        if let Some(status) = self.status.upgrade() {
             status.set_visible(false);
         }
-        self.0.refresh();
-        let weak = Rc::downgrade(&self.0);
+        self.refresh();
+        let weak = Rc::downgrade(self);
         gtk::glib::timeout_add_local_once(WINDOW, move || {
             if let Some(inner) = weak.upgrade() {
                 let mut entries = inner.entries.borrow_mut();
@@ -118,12 +124,6 @@ impl UndoBar {
         });
     }
 
-    pub fn restore(&self) -> bool {
-        self.0.restore()
-    }
-}
-
-impl UndoView {
     fn refresh(&self) {
         let now = Instant::now();
         let mut entries = self.entries.borrow_mut();
