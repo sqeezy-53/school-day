@@ -12,7 +12,8 @@
     "--share=network",
     "--socket=wayland",
     "--socket=fallback-x11",
-    "--device=dri"
+    "--device=dri",
+    "--unset-env=GTK_THEME"
   ],
   "build-options": {
     "strip": true,

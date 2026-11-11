@@ -43,6 +43,27 @@ pub fn load_json<T>(
 where
     T: DeserializeOwned + Serialize,
 {
+    load_json_inner(name, validate, true)
+}
+
+pub fn read_json<T>(
+    name: &str,
+    validate: impl Fn(&mut T) -> Result<(), String>,
+) -> Result<Option<T>, String>
+where
+    T: DeserializeOwned + Serialize,
+{
+    load_json_inner(name, validate, false)
+}
+
+fn load_json_inner<T>(
+    name: &str,
+    validate: impl Fn(&mut T) -> Result<(), String>,
+    migrate: bool,
+) -> Result<Option<T>, String>
+where
+    T: DeserializeOwned + Serialize,
+{
     let target = data_dir().join(name);
     match read_json_file(&target) {
         Ok(json) => return decode(&json, &validate).map(Some),
@@ -63,7 +84,9 @@ where
             Err(error) => return Err(format!("{}: {error}", source.display())),
         };
         let value = decode(&json, &validate)?;
-        save_json(name, &value)?;
+        if migrate {
+            save_json(name, &value)?;
+        }
         return Ok(Some(value));
     }
     Ok(None)

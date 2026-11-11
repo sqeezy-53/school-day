@@ -4,6 +4,7 @@ mod bells;
 mod forms;
 mod homework;
 mod lessons;
+mod renderer;
 mod schedule;
 mod settings;
 mod storage;
@@ -21,6 +22,7 @@ const APP_ID: &str = "io.github.sqeezy_53.school-day";
 const CSS: &str = include_str!("style.css");
 
 fn main() -> gtk::glib::ExitCode {
+    let args = renderer::prepare();
     #[cfg(target_os = "windows")]
     let _running = match windows::initialize() {
         Ok(guard) => guard,
@@ -39,7 +41,7 @@ fn main() -> gtk::glib::ExitCode {
             build_window(app);
         }
     });
-    let result = app.run();
+    let result = app.run_with_args_os(&args);
     #[cfg(windows)]
     {
         drop(app);
@@ -298,6 +300,7 @@ fn build_window(app: &adw::Application) {
         lessons_loaded,
     );
     window.present();
+    renderer::record_actual(&window);
 }
 
 fn brand_logo() -> gtk::DrawingArea {
