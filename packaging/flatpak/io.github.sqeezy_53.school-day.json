@@ -13,7 +13,9 @@
     "--socket=wayland",
     "--socket=fallback-x11",
     "--device=dri",
-    "--unset-env=GTK_THEME"
+    "--unset-env=GTK_THEME",
+    "--unset-env=__GLX_VENDOR_LIBRARY_NAME",
+    "--env=GSK_RENDERER=cairo"
   ],
   "build-options": {
     "strip": true,

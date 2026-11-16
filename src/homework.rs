@@ -456,7 +456,7 @@ impl HomeworkList {
         });
         let callback = Rc::clone(&rebuild);
         let weak_show_all = show_all.downgrade();
-        calendar.connect_day_selected(move |calendar| {
+        calendar.connect_date_notify(move |calendar| {
             let show_all = weak_show_all
                 .upgrade()
                 .is_some_and(|button| button.is_active());

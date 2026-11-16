@@ -5,7 +5,6 @@ use std::rc::Rc;
 
 use crate::bells::BellSchedule;
 use crate::forms::{self, CLASS_LIMIT};
-use crate::renderer::Renderer;
 use crate::tutorial::Anchor;
 use crate::{column, field, notify, primary, text};
 
@@ -29,7 +28,6 @@ pub struct Settings {
     pub check_updates: bool,
     pub hide_old_lessons: bool,
     pub old_lesson_days: u16,
-    pub renderer: Renderer,
 }
 
 impl Default for Settings {
@@ -43,7 +41,6 @@ impl Default for Settings {
             check_updates: false,
             hide_old_lessons: false,
             old_lesson_days: 14,
-            renderer: Renderer::Auto,
         }
     }
 }
@@ -85,13 +82,6 @@ fn validate(settings: &Settings) -> Result<(), String> {
 pub fn load_settings() -> Result<Settings, String> {
     Ok(
         crate::storage::load_json("settings.json", |settings| validate(settings))?
-            .unwrap_or_default(),
-    )
-}
-
-pub fn load_startup_settings() -> Result<Settings, String> {
-    Ok(
-        crate::storage::read_json("settings.json", |settings| validate(settings))?
             .unwrap_or_default(),
     )
 }
@@ -145,6 +135,15 @@ pub fn settings_page(status: &gtk::Label, brand: &gtk::Label, service: &gtk::Box
     let container = column(0);
     container.append(&settings_form(status, brand, &container, service));
     container
+}
+
+fn old_lesson_days_label(days: u16) -> String {
+    let unit = if days % 10 == 1 && days % 100 != 11 {
+        "дня"
+    } else {
+        "дней"
+    };
+    format!("Скрывать уроки старше {days} {unit}")
 }
 
 fn settings_form(
@@ -315,10 +314,7 @@ fn settings_form(
     hide_row.append(&hide_label);
     hide_row.append(&hide_old);
     old_lessons.append(&hide_row);
-    let days_label = text(
-        &format!("Скрывать уроки старше {} дней", loaded.old_lesson_days),
-        "section",
-    );
+    let days_label = text(&old_lesson_days_label(loaded.old_lesson_days), "section");
     let days = gtk::Scale::with_range(gtk::Orientation::Horizontal, 1.0, 180.0, 1.0);
     days.set_digits(0);
     days.set_round_digits(0);
@@ -331,31 +327,12 @@ fn settings_form(
     old_lessons.append(&days);
     advanced.append(&old_lessons);
 
-    let graphics = column(12);
-    graphics.add_css_class("settings-section");
-    let renderer_label = text("Графический рендерер", "settings-title");
-    let renderer = gtk::DropDown::from_strings(&Renderer::LABELS);
-    renderer.set_widget_name("renderer-choice");
-    renderer.set_selected(loaded.renderer.index());
-    renderer_label.set_mnemonic_widget(Some(&renderer));
-    let renderer_status = text(&crate::renderer::status_text(), "muted");
-    renderer_status.connect_map(|label| {
-        let status = crate::renderer::status_text();
-        label.set_text(&status);
-        label.set_visible(!status.is_empty());
-    });
-    graphics.append(&renderer_label);
-    graphics.append(&renderer);
-    graphics.append(&renderer_status);
-    advanced.append(&graphics);
-
     let current = Rc::new(RefCell::new(loaded));
     let saved = Rc::clone(&current);
 
     let weak_class = class.downgrade();
     let weak_class_error = class_error.downgrade();
     let weak_theme = theme.downgrade();
-    let weak_renderer = renderer.downgrade();
     let weak_hide_old = hide_old.downgrade();
     let weak_days = days.downgrade();
 
@@ -381,7 +358,6 @@ fn settings_form(
             Some(class),
             Some(class_error),
             Some(theme),
-            Some(renderer),
             Some(status),
             Some(brand),
             Some(automatic),
@@ -391,7 +367,6 @@ fn settings_form(
             weak_class.upgrade(),
             weak_class_error.upgrade(),
             weak_theme.upgrade(),
-            weak_renderer.upgrade(),
             weak_status.upgrade(),
             weak_brand.upgrade(),
             weak_automatic.upgrade(),
@@ -458,7 +433,6 @@ fn settings_form(
             check_updates: saved.borrow().check_updates,
             hide_old_lessons: hide_old.is_active(),
             old_lesson_days: days.value().round() as u16,
-            renderer: Renderer::from_index(renderer.selected()),
         };
 
         automatic.set_visible(candidate.theme == Theme::Auto);
@@ -468,28 +442,15 @@ fn settings_form(
             return;
         }
 
-        let renderer_changed = candidate.renderer != saved.borrow().renderer;
         match save_settings(&candidate) {
             Ok(()) => {
                 apply_settings(&candidate, &brand);
                 *saved.borrow_mut() = candidate;
 
-                notify(
-                    &status,
-                    if renderer_changed {
-                        "Рендерер сохранён. Выбор применится после следующего запуска"
-                    } else {
-                        "Настройки сохранены"
-                    },
-                );
+                notify(&status, "Настройки сохранены");
             }
 
             Err(error) => {
-                if renderer_changed {
-                    updating.set(true);
-                    renderer.set_selected(saved.borrow().renderer.index());
-                    updating.set(false);
-                }
                 notify(&status, &format!("Не удалось сохранить настройки: {error}"));
             }
         }
@@ -500,9 +461,6 @@ fn settings_form(
 
     let callback = Rc::clone(&commit);
     theme.connect_selected_notify(move |_| callback());
-
-    let callback = Rc::clone(&commit);
-    renderer.connect_selected_notify(move |_| callback());
 
     for spin in [&light_hour, &light_minute, &dark_hour, &dark_minute] {
         let callback = Rc::clone(&commit);
@@ -524,7 +482,7 @@ fn settings_form(
     let weak_days_label = days_label.downgrade();
     days.connect_value_changed(move |days| {
         if let Some(label) = weak_days_label.upgrade() {
-            label.set_text(&format!("Скрывать уроки старше {:.0} дней", days.value()));
+            label.set_text(&old_lesson_days_label(days.value().round() as u16));
         }
         if let Some(source) = pending_save.borrow_mut().take() {
             source.remove();
@@ -612,36 +570,30 @@ mod tests {
         assert!(settings.check_updates);
         assert!(!settings.hide_old_lessons);
         assert_eq!(settings.old_lesson_days, 14);
-        assert_eq!(settings.renderer, Renderer::Auto);
         assert!(validate(&settings).is_ok());
         Ok(())
     }
 
     #[test]
-    fn renderer_preferences_preserve_other_settings_and_recover_unknown_modes()
-    -> Result<(), serde_json::Error> {
+    fn legacy_renderer_is_ignored_while_other_settings_round_trip() -> Result<(), serde_json::Error>
+    {
         let original = Settings {
             class: "10Б".into(),
             theme: Theme::Dark,
             check_updates: true,
             hide_old_lessons: true,
             old_lesson_days: 90,
-            renderer: Renderer::Cairo,
             ..Settings::default()
         };
-        let mut json = serde_json::to_value(&original)?;
-        let decoded: Settings = serde_json::from_value(json.clone())?;
-        assert!(decoded == original);
-        json["renderer"] = "unknown-future-mode".into();
-        let decoded: Settings = serde_json::from_value(json)?;
-        assert_eq!(decoded.renderer, Renderer::Auto);
-        assert!(
-            decoded
-                == Settings {
-                    renderer: Renderer::Auto,
-                    ..original
-                }
-        );
+        for renderer in ["auto", "cairo", "gl", "opengl", "vulkan", "future-mode"] {
+            let mut legacy = serde_json::to_value(&original)?;
+            legacy["renderer"] = renderer.into();
+            let loaded: Settings = serde_json::from_value(legacy)?;
+            assert!(loaded == original);
+            let saved = serde_json::to_value(&loaded)?;
+            assert!(saved.get("renderer").is_none());
+            assert!(serde_json::from_value::<Settings>(saved)? == original);
+        }
         Ok(())
     }
 

@@ -55,6 +55,7 @@ pub fn homework_editor(height: i32) -> (gtk::ScrolledWindow, gtk::TextView) {
 }
 
 pub fn dialog_keys(window: &adw::Window, cancel: &gtk::Button, save: Option<&gtk::Button>) {
+    crate::seasonal::inherit_palette(window);
     let escape = gtk::EventControllerKey::new();
     let cancel = cancel.downgrade();
     escape.connect_key_pressed(move |_, key, _, _| {

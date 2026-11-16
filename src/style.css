@@ -6,12 +6,34 @@ headerbar { background: @headerbar_bg_color; box-shadow: none; border-bottom: 1p
 .muted { opacity: 0.60; }
 .section { font-size: 13px; font-weight: 500; }
 .navigation { padding: 3px; border-radius: 10px; background: alpha(@headerbar_fg_color, 0.06); border: 1px solid alpha(@headerbar_fg_color, 0.10); }
-.navigation button.nav { padding: 7px 12px; border: none; border-radius: 7px; background: transparent; color: alpha(@headerbar_fg_color, 0.70); }
-.navigation button.nav:hover { background: alpha(@headerbar_fg_color, 0.07); }
-.navigation button.nav:checked { background: alpha(@window_fg_color, 0.12); color: @window_fg_color; box-shadow: 0 1px 3px alpha(black, 0.14); }
-.navigation button.nav label, .navigation button.nav image { color: alpha(@window_fg_color, 0.70); }
-.navigation button.nav:checked label, .navigation button.nav:checked image { color: @window_fg_color; }
-.navigation button.nav:focus-visible { outline: 2px solid @accent_bg_color; outline-offset: -2px; }
+.navigation button.nav {
+    padding: 7px 12px;
+    border: none;
+    border-radius: 7px;
+    background-color: transparent;
+    background-image: none;
+    box-shadow: none;
+    color: alpha(@headerbar_fg_color, 0.70);
+    transition: background-color 150ms, color 150ms;
+}
+.navigation button.nav:hover {
+    background-color: var(--sd-hover, alpha(@headerbar_fg_color, 0.07));
+}
+.navigation button.nav:checked {
+    background-color: var(--sd-selected, alpha(@window_fg_color, 0.12));
+    color: @window_fg_color;
+}
+.navigation button.nav:checked:hover {
+    background-color: var(--sd-selected-hover, alpha(@window_fg_color, 0.16));
+}
+.navigation button.nav:active,
+.navigation button.nav:checked:active {
+    background-color: var(--sd-active, alpha(@window_fg_color, 0.22));
+}
+.navigation button.nav:focus-visible {
+    outline: 2px solid var(--sd-control, @accent_bg_color);
+    outline-offset: -2px;
+}
 .panel { padding: 20px 0; border-top: 1px solid alpha(@window_fg_color, 0.10); }
 .empty-icon { opacity: 0.55; }
 button { box-shadow: none; }

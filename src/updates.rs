@@ -93,7 +93,7 @@ pub fn indicator(
     icon.set_halign(gtk::Align::Center);
     icon.set_valign(gtk::Align::Center);
     icon.set_draw_func(|icon, context, _, _| {
-        let color = icon.style_context().color();
+        let color = icon.color();
         context.set_source_rgba(
             color.red().into(),
             color.green().into(),

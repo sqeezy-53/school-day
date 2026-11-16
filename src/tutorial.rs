@@ -486,7 +486,7 @@ impl Tour {
                 }
             });
         });
-        let schedule = crate::schedule::schedule_page(&status, items.clone(), None);
+        let (schedule, _) = crate::schedule::schedule_page(&status, items.clone(), None);
         let homework = crate::homework::homework_page(&status, items.clone(), None);
         pages.add_child(&schedule);
         pages.add_child(&homework);

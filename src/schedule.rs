@@ -11,10 +11,14 @@ use crate::undo::UndoHandle;
 
 use crate::{column, empty_state, field, margins, notify, page, primary, text};
 
-pub fn schedule_page(status: &gtk::Label, lessons: Lessons, undo: Option<&UndoHandle>) -> gtk::Box {
+pub fn schedule_page(
+    status: &gtk::Label,
+    lessons: Lessons,
+    undo: Option<&UndoHandle>,
+) -> (gtk::Box, gtk::Calendar) {
     let page = page("Расписание");
     let calendar = gtk::Calendar::new();
-    let date = date_button(&calendar);
+    let date = date_button_with_holidays(&calendar, true);
     Anchor::Date.mark(&date);
     let list = column(0);
     render_lessons(&list, &lessons, &calendar, status, None, undo);
@@ -130,12 +134,13 @@ pub fn schedule_page(status: &gtk::Label, lessons: Lessons, undo: Option<&UndoHa
     });
 
     let undo = undo.cloned();
-    calendar.connect_day_selected(move |calendar| {
+    // GtkCalendar emits day-selected only when the day number changes.
+    calendar.connect_date_notify(move |calendar| {
         if let Some(list) = weak_list.upgrade() {
             render_lessons(&list, &lessons, calendar, &status, None, undo.as_ref());
         }
     });
-    page
+    (page, calendar)
 }
 
 pub(crate) fn selected_date(calendar: &gtk::Calendar) -> NaiveDate {
@@ -157,16 +162,64 @@ pub(crate) fn select_date(calendar: &gtk::Calendar, date: NaiveDate) {
     }
 }
 
+fn add_holiday_details(calendar: &gtk::Calendar, content: &gtk::Box) {
+    let caption = gtk::Label::new(None);
+    caption.add_css_class("caption");
+    caption.set_wrap(true);
+    caption.set_max_width_chars(34);
+    caption.set_margin_bottom(6);
+    content.append(&caption);
+
+    let displayed_month = Cell::new(None);
+    let update = move |calendar: &gtk::Calendar| {
+        use gtk::accessible::Property;
+        let date = selected_date(calendar);
+        let month = date.with_day(1).expect("Every month has a first day");
+        if displayed_month.replace(Some(month)) != Some(month) {
+            calendar.clear_marks();
+            for day in 1..=31 {
+                if month
+                    .with_day(day)
+                    .and_then(crate::seasonal::name_on)
+                    .is_some()
+                {
+                    calendar.mark_day(day);
+                }
+            }
+        }
+        if let Some(description) = crate::seasonal::date_title(date) {
+            caption.set_label(&description);
+            calendar.update_property(&[Property::Description(&description)]);
+        } else {
+            caption.set_label("");
+            calendar.reset_property(gtk::AccessibleProperty::Description);
+        }
+    };
+    update(calendar);
+    calendar.connect_date_notify(update);
+}
+
 pub(crate) fn date_button(calendar: &gtk::Calendar) -> gtk::MenuButton {
+    date_button_with_holidays(calendar, false)
+}
+
+fn date_button_with_holidays(calendar: &gtk::Calendar, holidays: bool) -> gtk::MenuButton {
     let button = gtk::MenuButton::new();
     button.set_label(&selected_date(calendar).format("%d.%m.%Y").to_string());
     let popover = gtk::Popover::new();
     popover.set_has_arrow(false);
     let preview = gtk::Calendar::new();
-    popover.set_child(Some(&preview));
+    if holidays {
+        let content = gtk::Box::new(gtk::Orientation::Vertical, 5);
+        content.append(&preview);
+        add_holiday_details(&preview, &content);
+        popover.set_child(Some(&content));
+    } else {
+        popover.set_child(Some(&preview));
+    }
     button.set_popover(Some(&popover));
     let weak_button = button.downgrade();
-    calendar.connect_day_selected(move |calendar| {
+    calendar.connect_date_notify(move |calendar| {
         if let Some(button) = weak_button.upgrade() {
             button.set_label(&selected_date(calendar).format("%d.%m.%Y").to_string());
         }
@@ -774,7 +827,7 @@ fn on_add_lesson(
             Rc::clone(&syncing),
             bells.clone(),
         );
-        date_picker.connect_day_selected(move |calendar| {
+        date_picker.connect_date_notify(move |calendar| {
             feedback.set_visible(false);
             if !automatic_time.get() || start.has_pending_input() || end.has_pending_input() {
                 return;

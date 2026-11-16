@@ -1,0 +1,132 @@
+window.school-day,
+window.school-day headerbar,
+window.school-day .navigation,
+window.school-day .primary,
+window.school-day .bell-table,
+window.school-day .settings-link,
+window.school-day .tutorial-card,
+window.school-day .panel,
+window.school-day .undo-bar,
+window.school-day entry,
+window.school-day .homework-editor,
+window.school-day textview,
+window.school-day textview > text,
+window.school-day calendar,
+window.school-day popover > contents {
+    transition-property: background-color, border-color;
+    transition-duration: 350ms;
+}
+
+window.school-day.holiday {
+    --sd-window: mix(@window_bg_color, var(--sd-hue), var(--sd-strength));
+    --sd-header: mix(@headerbar_bg_color, var(--sd-hue), var(--sd-strength));
+    --sd-field: mix(@view_bg_color, var(--sd-hue), var(--sd-strength));
+    --sd-popover: mix(@popover_bg_color, var(--sd-hue), var(--sd-popover-strength));
+    --sd-control: mix(@window_fg_color, var(--sd-accent), 0.55);
+    --sd-border: alpha(var(--sd-control), 0.28);
+    --sd-hover: alpha(var(--sd-control), 0.17);
+    --sd-selected: alpha(var(--sd-control), 0.30);
+    --sd-selected-hover: alpha(var(--sd-control), 0.38);
+    --sd-active: alpha(var(--sd-control), 0.45);
+    background-color: var(--sd-window);
+}
+
+window.school-day-dialog.holiday {
+    background-color: mix(@dialog_bg_color, var(--sd-hue), var(--sd-strength));
+}
+
+window.school-day.holiday headerbar,
+window.school-day.holiday .undo-bar {
+    background-color: var(--sd-header);
+}
+
+window.school-day.holiday .navigation {
+    background-color: alpha(var(--sd-control), 0.14);
+    border-color: var(--sd-border);
+}
+
+window.school-day.holiday popover > contents,
+window.school-day.holiday popover > arrow {
+    background-color: var(--sd-popover);
+    border-color: var(--sd-border);
+}
+
+window.school-day.holiday entry,
+window.school-day.holiday .homework-editor,
+window.school-day.holiday textview,
+window.school-day.holiday textview > text,
+window.school-day.holiday calendar {
+    background-color: var(--sd-field);
+    border-color: var(--sd-border);
+}
+
+window.school-day.holiday .primary,
+window.school-day.holiday dropdown > button,
+window.school-day.holiday menubutton > button:not(.flat),
+window.school-day.holiday spinbutton > button,
+window.school-day.holiday switch {
+    background-color: alpha(var(--sd-control), 0.15);
+    border-color: var(--sd-border);
+}
+
+window.school-day.holiday button:not(.nav):not(.destructive-action):not(.suggested-action):hover,
+window.school-day.holiday popover modelbutton:hover,
+window.school-day.holiday popover row:hover,
+window.school-day.holiday calendar .day-number:hover {
+    background-color: var(--sd-hover);
+}
+
+window.school-day.holiday button:not(.nav):not(.destructive-action):not(.suggested-action):active,
+window.school-day.holiday popover modelbutton:active,
+window.school-day.holiday popover row:active {
+    background-color: var(--sd-active);
+}
+
+window.school-day.holiday check:checked,
+window.school-day.holiday switch:checked,
+window.school-day.holiday popover row:selected,
+window.school-day.holiday calendar .day-number:selected {
+    background-color: var(--sd-selected);
+    color: @window_fg_color;
+}
+
+window.school-day.holiday popover row:selected:hover,
+window.school-day.holiday calendar .day-number:selected:hover,
+window.school-day.holiday check:checked:hover,
+window.school-day.holiday switch:checked:hover {
+    background-color: var(--sd-selected-hover);
+}
+
+window.school-day.holiday entry:focus-within,
+window.school-day.holiday .homework-editor:focus-within {
+    border-color: var(--sd-control);
+}
+
+window.school-day.holiday .bell-table,
+window.school-day.holiday .settings-link,
+window.school-day.holiday .tutorial-card {
+    background-color: mix(var(--sd-window), var(--sd-control), 0.10);
+    border-color: var(--sd-border);
+}
+
+window.school-day.holiday .panel,
+window.school-day.holiday .settings-section,
+window.school-day.holiday .status,
+window.school-day.holiday .undo-bar {
+    border-top-color: var(--sd-border);
+}
+
+window.school-day .holiday-greeting {
+    background-color: @window_bg_color;
+    border: 1px solid alpha(@window_fg_color, 0.17);
+    border-radius: 12px;
+    color: @window_fg_color;
+    font-size: 0.94em;
+    font-weight: 600;
+    padding: 4px 10px;
+}
+
+window.school-day.holiday .holiday-greeting {
+    background-color: mix(var(--sd-window), var(--sd-control), 0.10);
+    border-color: var(--sd-border);
+}

@@ -6,6 +6,7 @@ mod homework;
 mod lessons;
 mod renderer;
 mod schedule;
+mod seasonal;
 mod settings;
 mod storage;
 mod tutorial;
@@ -22,7 +23,10 @@ const APP_ID: &str = "io.github.sqeezy_53.school-day";
 const CSS: &str = include_str!("style.css");
 
 fn main() -> gtk::glib::ExitCode {
-    let args = renderer::prepare();
+    if let Err(error) = renderer::prepare() {
+        eprintln!("Не удалось запустить School Day с Cairo: {error}");
+        return gtk::glib::ExitCode::FAILURE;
+    }
     #[cfg(target_os = "windows")]
     let _running = match windows::initialize() {
         Ok(guard) => guard,
@@ -41,7 +45,7 @@ fn main() -> gtk::glib::ExitCode {
             build_window(app);
         }
     });
-    let result = app.run_with_args_os(&args);
+    let result = app.run_with_args_os(&std::env::args_os().collect::<Vec<_>>());
     #[cfg(windows)]
     {
         drop(app);
@@ -83,7 +87,7 @@ fn build_window(app: &adw::Application) {
     };
     gtk::Window::set_default_icon_name(APP_ID);
     let css = gtk::CssProvider::new();
-    css.load_from_data(CSS);
+    css.load_from_data(&format!("{CSS}\n{}", seasonal::css()));
     gtk::style_context_add_provider_for_display(
         &gtk::gdk::Display::default().expect("Нужен графический сеанс"),
         &css,
@@ -128,18 +132,16 @@ fn build_window(app: &adw::Application) {
     status.set_visible(false);
     let undo = undo::UndoBar::new(&status);
     let undo_handle = undo.handle();
-    let lessons_loaded = match lessons::load_lessons() {
+    let schedule_calendar = match lessons::load_lessons() {
         Ok(loaded) => {
             let items = lessons::Lessons::new(loaded);
-            pages.add_named(
-                &schedule_page(&status, items.clone(), Some(&undo_handle)),
-                Some("schedule"),
-            );
+            let (schedule, calendar) = schedule_page(&status, items.clone(), Some(&undo_handle));
+            pages.add_named(&schedule, Some("schedule"));
             pages.add_named(
                 &homework::homework_page(&status, items, Some(&undo_handle)),
                 Some("homework"),
             );
-            true
+            Some(calendar)
         }
         Err(error) => {
             for (name, title) in [("schedule", "Расписание"), ("homework", "ДЗ")] {
@@ -150,7 +152,7 @@ fn build_window(app: &adw::Application) {
                 ));
                 pages.add_named(&content, Some(name));
             }
-            false
+            None
         }
     };
     let service = gtk::Box::new(gtk::Orientation::Horizontal, 8);
@@ -248,6 +250,9 @@ fn build_window(app: &adw::Application) {
         .content(&overlay)
         .build();
     window.add_breakpoint(compact);
+    if let Some(calendar) = &schedule_calendar {
+        seasonal::attach(&window, &overlay, calendar);
+    }
     let keys = gtk::EventControllerKey::new();
     keys.set_propagation_phase(gtk::PropagationPhase::Capture);
     let shortcut_tabs = tabs.each_ref().map(|tab| tab.downgrade());
@@ -297,7 +302,7 @@ fn build_window(app: &adw::Application) {
         &pages,
         tabs,
         &status,
-        lessons_loaded,
+        schedule_calendar.is_some(),
     );
     window.present();
     renderer::record_actual(&window);
@@ -310,7 +315,7 @@ fn brand_logo() -> gtk::DrawingArea {
     logo.set_valign(gtk::Align::Center);
     logo.add_css_class("brand-logo");
     logo.set_draw_func(|logo, context, width, height| {
-        let color = logo.style_context().color();
+        let color = logo.color();
         context.set_source_rgba(
             color.red().into(),
             color.green().into(),
