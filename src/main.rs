@@ -161,8 +161,7 @@ fn build_window(app: &adw::Application) {
         &settings::settings_page(&status, &brand, &service),
         Some("settings"),
     );
-    let navigation = gtk::Box::new(gtk::Orientation::Horizontal, 0);
-    navigation.add_css_class("linked");
+    let navigation = gtk::Box::new(gtk::Orientation::Horizontal, 3);
     navigation.add_css_class("navigation");
     header.set_title_widget(Some(&navigation));
     let compact = adw::Breakpoint::new(adw::BreakpointCondition::new_length(
@@ -223,8 +222,15 @@ fn build_window(app: &adw::Application) {
     scroll.set_hexpand(true);
     scroll.set_vexpand(true);
     scroll.set_child(Some(&clamp));
+    let update_button = service
+        .first_child()
+        .and_downcast::<gtk::MenuButton>()
+        .map(|button| button.downgrade());
     let weak_scroll = scroll.downgrade();
     pages.connect_visible_child_notify(move |_| {
+        if let Some(button) = update_button.as_ref().and_then(|button| button.upgrade()) {
+            button.popdown();
+        }
         if let Some(scroll) = weak_scroll.upgrade() {
             scroll.vadjustment().set_value(0.0);
             scroll.hadjustment().set_value(0.0);

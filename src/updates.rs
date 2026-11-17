@@ -7,6 +7,7 @@ use std::time::Duration;
 
 use crate::{column, notify, primary, text};
 
+mod markdown;
 #[cfg(windows)]
 mod windows;
 #[cfg(windows)]
@@ -16,6 +17,7 @@ const API: &str = "https://api.github.com/repos/sqeezy-53/school-day/releases/la
 #[cfg(not(windows))]
 const RELEASES: &str = "https://github.com/sqeezy-53/school-day/releases";
 const VERSION: &str = env!("CARGO_PKG_VERSION");
+const INDICATOR_TOOLTIP: &str = "Обновления приложения";
 
 #[derive(Debug, serde::Deserialize)]
 struct Release {
@@ -77,7 +79,6 @@ fn latest() -> Result<Release, String> {
         .read_to_vec()
         .map_err(|error| error.to_string())?;
     let release: Release = serde_json::from_slice(&body).map_err(|error| error.to_string())?;
-    release.version()?;
     Ok(release)
 }
 
@@ -114,8 +115,18 @@ pub fn indicator(
         context.line_to(13.0, 11.0);
         let _ = context.stroke();
     });
-    indicator.set_child(Some(&icon));
-    indicator.set_tooltip_text(Some("Обновления приложения"));
+    let glyph = gtk::Overlay::new();
+    glyph.set_child(Some(&icon));
+    let dot = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+    dot.add_css_class("update-dot");
+    dot.set_size_request(5, 5);
+    dot.set_halign(gtk::Align::End);
+    dot.set_valign(gtk::Align::Start);
+    dot.set_can_target(false);
+    dot.set_visible(false);
+    glyph.add_overlay(&dot);
+    indicator.set_child(Some(&glyph));
+    indicator.set_tooltip_text(Some(INDICATOR_TOOLTIP));
     indicator.add_css_class("circular");
     indicator.add_css_class("flat");
     indicator.add_css_class("update-indicator");
@@ -202,6 +213,7 @@ pub fn indicator(
 
     let view = Rc::new(UpdateView {
         indicator: indicator.downgrade(),
+        dot: dot.downgrade(),
         check: check.downgrade(),
         action: action.downgrade(),
         spinner: spinner.downgrade(),
@@ -295,6 +307,7 @@ pub fn indicator(
 
 struct UpdateView {
     indicator: gtk::glib::WeakRef<gtk::MenuButton>,
+    dot: gtk::glib::WeakRef<gtk::Box>,
     check: gtk::glib::WeakRef<gtk::Button>,
     action: gtk::glib::WeakRef<gtk::Button>,
     spinner: gtk::glib::WeakRef<gtk::Spinner>,
@@ -324,9 +337,6 @@ fn restore_button_focus(button: &gtk::glib::WeakRef<gtk::Button>, requested: boo
 
 impl UpdateView {
     fn message(&self, value: &str) {
-        if let Some(indicator) = self.indicator.upgrade() {
-            indicator.set_tooltip_text(Some(value));
-        }
         if let Some(feedback) = self.feedback.upgrade() {
             notify(&feedback, value);
         }
@@ -360,12 +370,7 @@ impl UpdateView {
             .is_some_and(|button| button.has_focus());
         self.set_busy(true);
         self.message("Проверяем обновления…");
-        if let Some(action) = self.action.upgrade() {
-            action.set_visible(false);
-        }
-        if let Some(scroll) = self.notes_scroll.upgrade() {
-            scroll.set_visible(false);
-        }
+        self.clear_release();
         let (sender, receiver) = mpsc::channel();
         std::thread::spawn(move || {
             let _ = sender.send(latest());
@@ -397,6 +402,22 @@ impl UpdateView {
         });
     }
 
+    fn clear_release(&self) {
+        self.release.borrow_mut().take();
+        if let Some(dot) = self.dot.upgrade() {
+            dot.set_visible(false);
+        }
+        if let Some(indicator) = self.indicator.upgrade() {
+            indicator.set_tooltip_text(Some(INDICATOR_TOOLTIP));
+        }
+        if let Some(action) = self.action.upgrade() {
+            action.set_visible(false);
+        }
+        if let Some(scroll) = self.notes_scroll.upgrade() {
+            scroll.set_visible(false);
+        }
+    }
+
     fn show_release(&self, release: Release) {
         let current = Version::parse(VERSION).expect("Некорректная версия приложения");
         let Ok(version) = release.version() else {
@@ -405,15 +426,15 @@ impl UpdateView {
         };
         if version <= current {
             self.message("Установлена последняя версия");
-            if let Some(indicator) = self.indicator.upgrade() {
-                indicator.remove_css_class("update-available");
-            }
-            self.release.borrow_mut().take();
             return;
         }
-        self.message(&format!("Доступна версия {version}"));
+        let available = format!("Доступна версия {version}");
+        self.message(&available);
         if let Some(indicator) = self.indicator.upgrade() {
-            indicator.add_css_class("update-available");
+            indicator.set_tooltip_text(Some(&available));
+        }
+        if let Some(dot) = self.dot.upgrade() {
+            dot.set_visible(true);
         }
         if let Some(notes) = self.notes.upgrade() {
             let body: String = release
@@ -421,9 +442,12 @@ impl UpdateView {
                 .as_deref()
                 .unwrap_or("Описание обновления появится на странице релиза.")
                 .chars()
+                .filter(|character| {
+                    !character.is_control() || matches!(character, '\n' | '\r' | '\t')
+                })
                 .take(6000)
                 .collect();
-            notes.set_text(&body);
+            notes.set_markup(&markdown::markup(&body));
         }
         if let Some(scroll) = self.notes_scroll.upgrade() {
             scroll.set_visible(true);
