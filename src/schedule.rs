@@ -5,11 +5,41 @@ use std::rc::Rc;
 
 use crate::bells::Bell;
 use crate::forms::{self, HOMEWORK_LIMIT, ROOM_LIMIT, SUBJECT_LIMIT};
-use crate::lessons::{HomeworkId, Lesson, Lessons, RecordId};
+use crate::lessons::{
+    DayOptions, HomeworkId, Lesson, LessonOptions, LessonWork, Lessons, MAX_SHORT_MINUTES,
+    NOTE_LIMIT, RecordId,
+};
 use crate::tutorial::Anchor;
 use crate::undo::UndoHandle;
 
 use crate::{column, empty_state, field, margins, notify, page, primary, text};
+
+struct ScheduleRows {
+    content: gtk::Box,
+    rows: RefCell<Vec<LessonRow>>,
+    revision: Cell<u64>,
+    focus_on_date_change: Cell<Option<NaiveTime>>,
+}
+
+struct LessonRow {
+    time: gtk::Label,
+    room: Option<gtk::Label>,
+}
+
+impl ScheduleRows {
+    fn update_day(&self, lessons: &[Lesson], previous: DayOptions, options: DayOptions) {
+        for (row, lesson) in self.rows.borrow().iter().zip(lessons) {
+            if previous.short_minutes != options.short_minutes {
+                row.time.set_label(&time_label(lesson, options));
+            }
+            if previous.remote != options.remote
+                && let Some(room) = &row.room
+            {
+                room.set_visible(!options.remote);
+            }
+        }
+    }
+}
 
 pub fn schedule_page(
     status: &gtk::Label,
@@ -20,14 +50,17 @@ pub fn schedule_page(
     let calendar = gtk::Calendar::new();
     let date = date_button_with_holidays(&calendar, true);
     Anchor::Date.mark(&date);
-    let list = column(0);
+    let list = Rc::new(ScheduleRows {
+        content: column(0),
+        rows: RefCell::new(Vec::new()),
+        revision: Cell::new(lessons.revision()),
+        focus_on_date_change: Cell::new(None),
+    });
     render_lessons(&list, &lessons, &calendar, status, None, undo);
 
     let toolbar = adw::WrapBox::new();
     toolbar.set_child_spacing(8);
     toolbar.set_line_spacing(8);
-    toolbar.set_justify(adw::JustifyMode::Spread);
-    toolbar.set_justify_last_line(true);
     let date_controls = gtk::Box::new(gtk::Orientation::Horizontal, 6);
     for (icon, offset, label) in [
         ("go-previous-symbolic", -1, "Предыдущий день"),
@@ -57,13 +90,16 @@ pub fn schedule_page(
     });
     date_controls.append(&today);
     toolbar.append(&date_controls);
+    toolbar.append(&day_options_button(
+        &lessons, &calendar, &list, status, undo,
+    ));
     let add = primary("Добавить урок");
     Anchor::AddLesson.mark(&add);
     let (items, calendar_for_add, status_for_add, weak_list) = (
         lessons.clone(),
         calendar.clone(),
         status.clone(),
-        list.downgrade(),
+        Rc::downgrade(&list),
     );
     let undo_for_add = undo.cloned();
     add.connect_clicked(move |_| {
@@ -80,17 +116,21 @@ pub fn schedule_page(
     });
     toolbar.append(&add);
     page.append(&toolbar);
-    page.append(&list);
+    page.append(&list.content);
 
     if let Some(undo) = undo.cloned() {
-        let (list, calendar, status) = (list.downgrade(), calendar.downgrade(), status.downgrade());
+        let (list, calendar, status) = (
+            Rc::downgrade(&list),
+            calendar.downgrade(),
+            status.downgrade(),
+        );
         lessons.connect_restored(move |lessons, removed| {
             let (Some(list), Some(calendar), Some(status)) =
                 (list.upgrade(), calendar.upgrade(), status.upgrade())
             else {
                 return;
             };
-            if !list.is_mapped() {
+            if !list.content.is_mapped() {
                 return;
             }
             let slot = removed.lesson_slot().or_else(|| {
@@ -112,16 +152,14 @@ pub fn schedule_page(
         });
     }
 
-    let weak_list = list.downgrade();
+    let weak_list = Rc::downgrade(&list);
     let status = status.clone();
     let items_for_map = lessons.clone();
     let calendar_for_map = calendar.clone();
     let status_for_map = status.clone();
-    let list_for_map = list.downgrade();
-
     let undo_for_map = undo.cloned();
     page.connect_map(move |_| {
-        if let Some(list) = list_for_map.upgrade() {
+        if list.revision.get() != items_for_map.revision() {
             render_lessons(
                 &list,
                 &items_for_map,
@@ -137,10 +175,197 @@ pub fn schedule_page(
     // GtkCalendar emits day-selected only when the day number changes.
     calendar.connect_date_notify(move |calendar| {
         if let Some(list) = weak_list.upgrade() {
-            render_lessons(&list, &lessons, calendar, &status, None, undo.as_ref());
+            let focus = list.focus_on_date_change.take();
+            render_lessons(&list, &lessons, calendar, &status, focus, undo.as_ref());
         }
     });
     (page, calendar)
+}
+
+fn show_day_options(button: &gtk::MenuButton, remote: &gtk::Image, options: DayOptions) {
+    use gtk::accessible::Property;
+    remote.set_visible(options.remote);
+    button.set_css_classes(if options == DayOptions::default() {
+        &["day-options"]
+    } else {
+        &["day-options", "day-configured"]
+    });
+    let mut description = Vec::new();
+    if options.remote {
+        description.push("Весь день дистанционно".to_string());
+    }
+    if let Some(minutes) = options.short_minutes {
+        description.push(format!("Уроки до {minutes} мин"));
+    }
+    let description = description.join("\n");
+    let tooltip = if description.is_empty() {
+        "Настройки выбранного дня".to_string()
+    } else {
+        format!("Настройки выбранного дня\n{description}")
+    };
+    button.set_tooltip_text(Some(&tooltip));
+    button.update_property(&[
+        Property::Label("Настройки выбранного дня"),
+        Property::Description(&description),
+    ]);
+}
+
+fn remote_day_icon() -> gtk::Image {
+    use gtk::accessible::Property;
+    let svg = gtk::glib::Bytes::from_static(include_bytes!("icons/day-remote.svg"));
+    let stream = gtk::gio::MemoryInputStream::from_bytes(&svg);
+    let icon = match gtk::gdk_pixbuf::Pixbuf::from_stream(&stream, gtk::gio::Cancellable::NONE) {
+        Ok(pixbuf) => gtk::Image::from_paintable(Some(&gtk::gdk::Texture::for_pixbuf(&pixbuf))),
+        Err(_) => gtk::Image::from_icon_name("computer-symbolic"),
+    };
+    icon.add_css_class("remote-day");
+    icon.set_valign(gtk::Align::Center);
+    icon.set_tooltip_text(Some("Весь день дистанционно"));
+    icon.update_property(&[Property::Label("Весь день дистанционно")]);
+    icon
+}
+
+fn day_options_button(
+    lessons: &Lessons,
+    calendar: &gtk::Calendar,
+    list: &Rc<ScheduleRows>,
+    status: &gtk::Label,
+    undo: Option<&UndoHandle>,
+) -> gtk::Box {
+    let button = gtk::MenuButton::new();
+    button.set_label("День");
+    let indicator = remote_day_icon();
+    let day_controls = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+    day_controls.append(&indicator);
+    day_controls.append(&button);
+    show_day_options(
+        &button,
+        &indicator,
+        lessons.day_options(selected_date(calendar)),
+    );
+
+    let popover = gtk::Popover::new();
+    let form = column(10);
+    margins(&form, 12);
+    let remote = gtk::ToggleButton::with_label("Дистант");
+    remote.set_halign(gtk::Align::Start);
+    form.append(&remote);
+    let shortened = gtk::CheckButton::with_label("Сокращённый день");
+    form.append(&shortened);
+    let minutes_row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+    let minutes = gtk::SpinButton::with_range(1.0, f64::from(MAX_SHORT_MINUTES), 1.0);
+    minutes.set_numeric(true);
+    let minutes_label = text("Минут на урок", "section");
+    minutes_label.set_mnemonic_widget(Some(&minutes));
+    minutes_row.append(&minutes_label);
+    minutes_row.append(&minutes);
+    form.append(&minutes_row);
+    let feedback = text("", "form-error");
+    feedback.set_visible(false);
+    form.append(&feedback);
+    let save = primary("Применить");
+    form.append(&save);
+    popover.set_child(Some(&form));
+    button.set_popover(Some(&popover));
+
+    let weak_button = button.downgrade();
+    let weak_indicator = indicator.downgrade();
+    let items = lessons.clone();
+    calendar.connect_date_notify(move |date| {
+        if let (Some(button), Some(indicator)) = (weak_button.upgrade(), weak_indicator.upgrade()) {
+            button.popdown();
+            show_day_options(&button, &indicator, items.day_options(selected_date(date)));
+        }
+    });
+
+    let items = lessons.clone();
+    let date = calendar.clone();
+    let controls = (remote.clone(), shortened.clone(), minutes.clone());
+    let show_feedback = feedback.clone();
+    popover.connect_show(move |_| {
+        show_feedback.set_visible(false);
+        let options = items.day_options(selected_date(&date));
+        controls.0.set_active(options.remote);
+        controls.1.set_active(options.short_minutes.is_some());
+        controls.2.set_sensitive(options.short_minutes.is_some());
+        controls
+            .2
+            .set_value(f64::from(options.short_minutes.unwrap_or(30)));
+    });
+    let weak_minutes = minutes.downgrade();
+    shortened.connect_toggled(move |shortened| {
+        if let Some(minutes) = weak_minutes.upgrade() {
+            minutes.set_sensitive(shortened.is_active());
+        }
+    });
+
+    let (items, date, weak_list, status, weak_button, undo) = (
+        lessons.clone(),
+        calendar.clone(),
+        Rc::downgrade(list),
+        status.clone(),
+        button.downgrade(),
+        undo.cloned(),
+    );
+    let weak_indicator = indicator.downgrade();
+    let persist = Rc::new(move |options: DayOptions| {
+        let day = selected_date(&date);
+        let previous = items.day_options(day);
+        let previous_revision = items.revision();
+        feedback.set_visible(false);
+        match items.set_day_options(day, options) {
+            Ok(()) => {
+                if previous != options {
+                    if let (Some(button), Some(indicator)) =
+                        (weak_button.upgrade(), weak_indicator.upgrade())
+                    {
+                        show_day_options(&button, &indicator, options);
+                    }
+                    if let Some(list) = weak_list.upgrade() {
+                        if list.revision.get() == previous_revision {
+                            list.update_day(&items.on_date(day), previous, options);
+                            list.revision.set(items.revision());
+                        } else {
+                            render_lessons(&list, &items, &date, &status, None, undo.as_ref());
+                        }
+                    }
+                }
+                true
+            }
+            Err(error) => {
+                notify(
+                    &feedback,
+                    &format!("Не удалось сохранить настройки дня: {error}"),
+                );
+                false
+            }
+        }
+    });
+    let apply_remote = Rc::clone(&persist);
+    let items = lessons.clone();
+    let date = calendar.clone();
+    remote.connect_clicked(move |remote| {
+        let mut options = items.day_options(selected_date(&date));
+        let previous = options.remote;
+        options.remote = remote.is_active();
+        if !apply_remote(options) {
+            remote.set_active(previous);
+        }
+    });
+    let items = lessons.clone();
+    let date = calendar.clone();
+    let weak_button = button.downgrade();
+    save.connect_clicked(move |_| {
+        minutes.update();
+        let mut options = items.day_options(selected_date(&date));
+        options.short_minutes = shortened.is_active().then(|| minutes.value_as_int() as u16);
+        if persist(options)
+            && let Some(button) = weak_button.upgrade()
+        {
+            button.popdown();
+        }
+    });
+    day_controls
 }
 
 pub(crate) fn selected_date(calendar: &gtk::Calendar) -> NaiveDate {
@@ -286,47 +511,113 @@ fn date_button_with_holidays(calendar: &gtk::Calendar, holidays: bool) -> gtk::M
     button
 }
 
+fn time_label(lesson: &Lesson, options: DayOptions) -> String {
+    format!(
+        "{}\n{}",
+        lesson.time.format("%H:%M"),
+        options.end_time(lesson).format("%H:%M")
+    )
+}
+
+fn lesson_badge(label: &str, description: &str, kind: &str) -> gtk::Label {
+    use gtk::accessible::Property;
+    let badge = gtk::Label::new(Some(label));
+    badge.add_css_class("lesson-badge");
+    badge.add_css_class(kind);
+    badge.set_valign(gtk::Align::Center);
+    badge.set_tooltip_text(Some(description));
+    badge.update_property(&[Property::Label(description)]);
+    badge
+}
+
+fn lesson_heading(lesson: &Lesson) -> gtk::Widget {
+    let replacement = !lesson.options.replacement.is_empty();
+    let title = text(
+        if replacement {
+            &lesson.options.replacement
+        } else {
+            &lesson.title
+        },
+        "section",
+    );
+    title.add_css_class("lesson-title");
+    if !replacement && !lesson.options.cancelled && lesson.options.work == LessonWork::Regular {
+        return title.upcast();
+    }
+
+    let heading = adw::WrapBox::new();
+    heading.set_child_spacing(5);
+    heading.set_line_spacing(3);
+    heading.append(&title);
+    if lesson.options.cancelled {
+        heading.append(&lesson_badge("Отменён", "Урок отменён", "cancelled"));
+    }
+    if replacement {
+        heading.append(&lesson_badge("Замена", "Предмет заменён", "replacement"));
+    }
+    let work = match lesson.options.work {
+        LessonWork::Regular => None,
+        LessonWork::Test => Some(("К/Р", "Контрольная работа")),
+        LessonWork::Independent => Some(("С/Р", "Самостоятельная работа")),
+    };
+    if let Some((label, description)) = work {
+        heading.append(&lesson_badge(label, description, "schoolwork"));
+    }
+    heading.upcast()
+}
+
 fn render_lessons(
-    list: &gtk::Box,
+    list: &Rc<ScheduleRows>,
     lessons: &Lessons,
     calendar: &gtk::Calendar,
     status: &gtk::Label,
     focus_time: Option<NaiveTime>,
     undo: Option<&UndoHandle>,
 ) {
-    while let Some(child) = list.first_child() {
-        list.remove(&child);
+    while let Some(child) = list.content.first_child() {
+        list.content.remove(&child);
     }
-    let day: Vec<_> = lessons
-        .borrow()
-        .iter()
-        .filter(|lesson| lesson.date == selected_date(calendar))
-        .cloned()
-        .collect();
+    let date = selected_date(calendar);
+    let options = lessons.day_options(date);
+    let day = lessons.on_date(date);
+    list.revision.set(lessons.revision());
     if day.is_empty() {
-        list.append(&empty_state("x-office-calendar-symbolic", "Нет уроков"));
+        list.rows.borrow_mut().clear();
+        list.content
+            .append(&empty_state("x-office-calendar-symbolic", "Нет уроков"));
         return;
     }
-    for lesson in day {
+    let mut rows = Vec::with_capacity(day.len());
+    for lesson in day.iter() {
         let (id, time_of_lesson) = (lesson.id, lesson.time);
         let row = gtk::Box::new(gtk::Orientation::Horizontal, 16);
         row.add_css_class("panel");
-        let time = text(
-            &format!(
-                "{}\n{}",
-                lesson.time.format("%H:%M"),
-                lesson.end.format("%H:%M")
-            ),
-            "muted",
-        );
+        if lesson.options.cancelled {
+            row.add_css_class("lesson-cancelled");
+        }
+        let time = text(&time_label(lesson, options), "muted");
         time.set_width_chars(5);
         time.set_valign(gtk::Align::Center);
         row.append(&time);
         let details = column(4);
+        details.add_css_class("lesson-details");
         details.set_hexpand(true);
         details.set_valign(gtk::Align::Center);
-        details.append(&text(&lesson.title, "section"));
-        details.append(&text(&format!("Кабинет {}", lesson.room), "muted"));
+        details.append(&lesson_heading(lesson));
+        let room = (!lesson.room.trim().is_empty()).then(|| {
+            let room = text(&format!("Кабинет {}", lesson.room), "muted");
+            room.set_visible(!options.remote);
+            details.append(&room);
+            room
+        });
+        rows.push(LessonRow { time, room });
+        if !lesson.note.is_empty() {
+            let note = text(&format!("Заметка: {}", lesson.note), "muted");
+            note.set_lines(2);
+            note.set_ellipsize(gtk::pango::EllipsizeMode::End);
+            note.set_tooltip_text(Some(&lesson.note));
+            details.append(&note);
+        }
         if !lesson.homework.is_empty() {
             let label = if lesson.homework_completed {
                 "ДЗ выполнено"
@@ -353,7 +644,7 @@ fn render_lessons(
                 lessons.clone(),
                 calendar.clone(),
                 status.clone(),
-                list.downgrade(),
+                Rc::downgrade(list),
             );
             let undo = undo.cloned();
             button.connect_clicked(move |_| {
@@ -377,18 +668,10 @@ fn render_lessons(
                                 Ok(removed) => {
                                     let focus_time = {
                                         let date = selected_date(&calendar);
-                                        let items = items.borrow();
-                                        items
-                                            .iter()
-                                            .find(|lesson| {
-                                                lesson.date == date && lesson.time > time_of_lesson
-                                            })
-                                            .or_else(|| {
-                                                items
-                                                    .iter()
-                                                    .rev()
-                                                    .find(|lesson| lesson.date == date)
-                                            })
+                                        let day = items.on_date(date);
+                                        day.iter()
+                                            .find(|lesson| lesson.time > time_of_lesson)
+                                            .or_else(|| day.last())
                                             .map(|lesson| lesson.time)
                                     };
                                     render_lessons(
@@ -400,7 +683,7 @@ fn render_lessons(
                                         undo.as_ref(),
                                     );
                                     if focus_time.is_none()
-                                        && let Some(page) = list.parent()
+                                        && let Some(page) = list.content.parent()
                                     {
                                         page.child_focus(gtk::DirectionType::TabForward);
                                     }
@@ -420,11 +703,12 @@ fn render_lessons(
             });
             row.append(&button);
         }
-        list.append(&row);
+        list.content.append(&row);
         if let Some(focus) = focus {
             focus.grab_focus();
         }
     }
+    *list.rows.borrow_mut() = rows;
 }
 
 #[derive(Clone)]
@@ -518,39 +802,33 @@ fn time_spin(maximum: u32, step: f64, label: &str) -> (gtk::SpinButton, Rc<Cell<
     (spin, invalid)
 }
 
-fn suggested_bell(items: &[Lesson], date: NaiveDate, bells: &[Bell]) -> Option<usize> {
-    let last_end = items
-        .iter()
-        .filter(|lesson| lesson.date == date)
-        .map(|lesson| lesson.end)
-        .max();
-    let free = |bell: &Bell| {
-        !items
-            .iter()
-            .any(|lesson| lesson.date == date && lesson.time < bell.end && bell.start < lesson.end)
-    };
+fn suggested_bell(day: &[Lesson], bells: &[Bell]) -> Option<usize> {
+    let last_end = day.last().map(|lesson| lesson.end);
     bells
         .iter()
-        .position(|bell| last_end.is_none_or(|end| bell.start >= end) && free(bell))
-        .or_else(|| bells.iter().position(free))
+        .position(|bell| last_end.is_none_or(|end| bell.start >= end))
+        .or_else(|| {
+            bells.iter().position(|bell| {
+                !day.iter()
+                    .any(|lesson| lesson.time < bell.end && bell.start < lesson.end)
+            })
+        })
 }
 
 fn suggested_time(
-    items: &[Lesson],
-    date: NaiveDate,
+    day: &[Lesson],
     bells: &[Bell],
     minutes: i64,
 ) -> (Option<usize>, NaiveTime, NaiveTime) {
-    if let Some(index) = suggested_bell(items, date, bells) {
+    if let Some(index) = suggested_bell(day, bells) {
         return (Some(index), bells[index].start, bells[index].end);
     }
-    let day = || items.iter().filter(|lesson| lesson.date == date);
     let duration = chrono::Duration::minutes(minutes);
     let end_for = |start: NaiveTime| {
         let (end, overflow) = start.overflowing_add_signed(duration);
         (overflow == 0).then_some(end)
     };
-    if let Some(last_end) = day().map(|lesson| lesson.end).max() {
+    if let Some(last_end) = day.last().map(|lesson| lesson.end) {
         let (start, overflow) = last_end.overflowing_add_signed(chrono::Duration::minutes(10));
         if overflow == 0
             && let Some(end) = end_for(start)
@@ -559,7 +837,7 @@ fn suggested_time(
         }
     }
     for mut start in [bells[0].start, NaiveTime::MIN] {
-        for lesson in day() {
+        for lesson in day {
             if let Some(end) = end_for(start)
                 && end <= lesson.time
             {
@@ -577,7 +855,7 @@ fn suggested_time(
 fn on_add_lesson(
     status: &gtk::Label,
     lessons: &Lessons,
-    list: &gtk::Box,
+    list: &Rc<ScheduleRows>,
     calendar: &gtk::Calendar,
     id: Option<RecordId>,
     undo: Option<&UndoHandle>,
@@ -620,7 +898,7 @@ fn on_add_lesson(
             lesson.end,
         )
     } else {
-        suggested_time(&lessons.borrow(), date, &bells, lesson_minutes)
+        suggested_time(&lessons.on_date(date), &bells, lesson_minutes)
     };
     let root = column(0);
     let header = adw::HeaderBar::new();
@@ -772,7 +1050,7 @@ fn on_add_lesson(
             }
         });
     }
-    let room = field(&form, "Кабинет", "Например, 43 или спортзал");
+    let room = field(&form, "Кабинет", "Необязательно");
 
     let room_error = forms::error_label(&form, &room);
     let (homework_scroll, homework) = forms::homework_editor(100);
@@ -781,6 +1059,52 @@ fn on_add_lesson(
     form.append(&homework_label);
     form.append(&homework_scroll);
     let homework_error = forms::error_label(&form, &homework_scroll);
+    let extras = gtk::Expander::new(Some("Заметка, замена и отметки"));
+    let extras_form = column(10);
+    extras_form.set_margin_top(10);
+    let note = field(&extras_form, "Заметка", "Например, принести атлас");
+    let note_error = forms::error_label(&extras_form, &note);
+    let replacement = field(
+        &extras_form,
+        "Замена предмета",
+        "Оставьте пустым для обычного урока",
+    );
+    let replacement_error = forms::error_label(&extras_form, &replacement);
+    let cancelled = gtk::CheckButton::with_label("Урок отменён");
+    extras_form.append(&cancelled);
+    let work = gtk::DropDown::from_strings(&[
+        "Обычный урок",
+        "Контрольная работа",
+        "Самостоятельная работа",
+    ]);
+    let work_label = text("Вид работы", "section");
+    work_label.set_mnemonic_widget(Some(&work));
+    extras_form.append(&work_label);
+    extras_form.append(&work);
+    extras.set_child(Some(&extras_form));
+    form.append(&extras);
+
+    if let Some(lesson) = &existing {
+        note.set_text(&lesson.note);
+        let controls = (replacement.clone(), cancelled.clone(), work.clone());
+        let original_date = lesson.date;
+        let options = lesson.options.clone();
+        let sync = move |calendar: &gtk::Calendar| {
+            let same_date = selected_date(calendar) == original_date;
+            controls
+                .0
+                .set_text(if same_date { &options.replacement } else { "" });
+            controls.1.set_active(same_date && options.cancelled);
+            controls.2.set_selected(if same_date {
+                work_index(options.work)
+            } else {
+                0
+            });
+        };
+        sync(&date_picker);
+        date_picker.connect_date_notify(sync);
+        extras.set_expanded(!lesson.note.is_empty() || lesson.options != LessonOptions::default());
+    }
 
     if let Some(lesson) = &existing {
         title.set_text(&lesson.title);
@@ -791,7 +1115,12 @@ fn on_add_lesson(
 
     let feedback = text("", "form-error");
     feedback.set_visible(false);
-    for (entry, error) in [(&title, &title_error), (&room, &room_error)] {
+    for (entry, error) in [
+        (&title, &title_error),
+        (&room, &room_error),
+        (&note, &note_error),
+        (&replacement, &replacement_error),
+    ] {
         let feedback = feedback.clone();
         let error = error.clone();
         entry.connect_changed(move |_| {
@@ -833,8 +1162,7 @@ fn on_add_lesson(
                 return;
             }
             let (slot, from, to) = suggested_time(
-                &items.borrow(),
-                selected_date(calendar),
+                &items.on_date(selected_date(calendar)),
                 &bells,
                 lesson_minutes,
             );
@@ -892,7 +1220,7 @@ fn on_add_lesson(
         lessons.clone(),
         calendar.clone(),
         status.clone(),
-        list.downgrade(),
+        Rc::downgrade(list),
         window.downgrade(),
     );
     let title_for_focus = title.clone();
@@ -901,6 +1229,8 @@ fn on_add_lesson(
         for error in [
             &title_error,
             &room_error,
+            &note_error,
+            &replacement_error,
             &homework_error,
             &time_error,
             &feedback,
@@ -909,6 +1239,8 @@ fn on_add_lesson(
         }
         let title_value = title.text();
         let room_value = room.text();
+        let note_value = note.text();
+        let replacement_value = replacement.text();
         let buffer = homework.buffer();
         let homework_value = buffer.text(&buffer.start_iter(), &buffer.end_iter(), false);
         for (value, previous, limit, widget, label, empty) in [
@@ -926,7 +1258,23 @@ fn on_add_lesson(
                 ROOM_LIMIT,
                 room.upcast_ref::<gtk::Widget>(),
                 &room_error,
-                Some("Введите кабинет"),
+                None,
+            ),
+            (
+                note_value.trim(),
+                "",
+                NOTE_LIMIT,
+                note.upcast_ref::<gtk::Widget>(),
+                &note_error,
+                None,
+            ),
+            (
+                replacement_value.trim(),
+                "",
+                SUBJECT_LIMIT,
+                replacement.upcast_ref::<gtk::Widget>(),
+                &replacement_error,
+                None,
             ),
             (
                 homework_value.trim(),
@@ -945,6 +1293,11 @@ fn on_add_lesson(
                 forms::length_error(value, previous, limit)
             };
             if let Some(error) = error {
+                if widget == note.upcast_ref::<gtk::Widget>()
+                    || widget == replacement.upcast_ref::<gtk::Widget>()
+                {
+                    extras.set_expanded(true);
+                }
                 notify(label, &error);
                 widget.grab_focus();
                 return;
@@ -994,6 +1347,16 @@ fn on_add_lesson(
         )
         .and_then(|mut lesson| {
             lesson.homework = homework_value.trim().to_string();
+            lesson.note = note_value.trim().to_string();
+            lesson.options = LessonOptions {
+                replacement: replacement_value.trim().to_string(),
+                cancelled: cancelled.is_active(),
+                work: match work.selected() {
+                    1 => LessonWork::Test,
+                    2 => LessonWork::Independent,
+                    _ => LessonWork::Regular,
+                },
+            };
 
             if let Some(previous) = &existing {
                 if title_value == previous.title {
@@ -1013,9 +1376,14 @@ fn on_add_lesson(
 
         match result {
             Ok(attached) => {
-                select_date(&calendar, date);
-                if let Some(list) = weak_list.upgrade() {
-                    let focus = id.map(|_| start_picker.time());
+                let focus = id.map(|_| start_picker.time());
+                let list = weak_list.upgrade();
+                if date != selected_date(&calendar) {
+                    if let Some(list) = list {
+                        list.focus_on_date_change.set(focus);
+                    }
+                    select_date(&calendar, date);
+                } else if let Some(list) = list {
                     render_lessons(&list, &items, &calendar, &status, focus, undo.as_ref());
                 }
                 let message = if attached.is_empty() {
@@ -1039,6 +1407,14 @@ fn on_add_lesson(
     title_for_focus.grab_focus();
 }
 
+fn work_index(work: LessonWork) -> u32 {
+    match work {
+        LessonWork::Regular => 0,
+        LessonWork::Test => 1,
+        LessonWork::Independent => 2,
+    }
+}
+
 fn connect_subject_suggestions(
     title: &gtk::Entry,
     room: &gtk::Entry,
@@ -1048,14 +1424,13 @@ fn connect_subject_suggestions(
     use gtk::gdk::Key;
     use gtk::glib::Propagation;
 
-    let mut history = lessons.borrow().clone();
-    history.sort_by_key(|lesson| std::cmp::Reverse((lesson.date, lesson.time)));
     let mut known = Vec::new();
     let mut seen = std::collections::HashSet::new();
-    for lesson in history {
-        let name = lesson.title.trim().to_string();
-        if !name.is_empty() && seen.insert(name.to_lowercase()) {
-            known.push((name, lesson.room));
+    for lesson in lessons.borrow().iter().rev() {
+        let name = lesson.title.trim();
+        let key = name.to_lowercase();
+        if !name.is_empty() && seen.insert(key.clone()) {
+            known.push((name.to_owned(), lesson.room.clone(), key));
         }
     }
 
@@ -1075,12 +1450,17 @@ fn connect_subject_suggestions(
             }
             let found: Vec<_> = known
                 .iter()
-                .filter(|(name, _)| name.to_lowercase().starts_with(&query))
+                .filter(|(_, _, key)| key.starts_with(&query))
                 .take(6)
-                .cloned()
+                .map(|(name, room, _)| (name.clone(), room.clone()))
                 .collect();
             for (name, room) in &found {
-                let label = text(&format!("{name} · {room}"), "section");
+                let description = if room.trim().is_empty() {
+                    name.clone()
+                } else {
+                    format!("{name} · {room}")
+                };
+                let label = text(&description, "section");
                 margins(&label, 10);
                 list.append(&label);
             }
@@ -1156,13 +1536,12 @@ mod tests {
 
     #[test]
     fn suggests_a_free_interval_between_lessons_before_the_first_bell() {
-        let date = NaiveDate::from_ymd_opt(2026, 11, 6).unwrap();
         let items = [
             parse_lesson("Первый", "06.11.2026", "00:00", "01:00", "1").unwrap(),
             parse_lesson("Второй", "06.11.2026", "08:00", "23:55", "1").unwrap(),
         ];
         let bells = crate::bells::BellSchedule::default().slots().unwrap();
-        let (slot, start, end) = suggested_time(&items, date, &bells, 40);
+        let (slot, start, end) = suggested_time(&items, &bells, 40);
         assert_eq!(slot, None);
         assert_eq!(start, NaiveTime::from_hms_opt(1, 0, 0).unwrap());
         assert_eq!(end, NaiveTime::from_hms_opt(1, 40, 0).unwrap());

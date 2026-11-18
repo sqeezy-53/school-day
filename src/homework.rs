@@ -1,6 +1,6 @@
 use adw::prelude::*;
 use chrono::{Datelike, NaiveDate};
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::HashSet;
 use std::rc::Rc;
 
@@ -28,6 +28,7 @@ pub fn homework_page(status: &gtk::Label, lessons: Lessons, undo: Option<&UndoHa
 
     let list = Rc::new(HomeworkList {
         lessons,
+        rendered_revision: Cell::new(None),
         status: status.clone(),
         add: add.clone(),
         open,
@@ -52,7 +53,6 @@ pub fn homework_page(status: &gtk::Label, lessons: Lessons, undo: Option<&UndoHa
             }
         });
     }
-    list.render(None);
     page.connect_map(move |_| list.render(None));
     page
 }
@@ -66,6 +66,7 @@ enum RowFocus {
 
 struct HomeworkList {
     lessons: Lessons,
+    rendered_revision: Cell<Option<u64>>,
     status: gtk::Label,
     add: gtk::Button,
     open: gtk::Box,
@@ -76,6 +77,10 @@ struct HomeworkList {
 
 impl HomeworkList {
     fn render(self: &Rc<Self>, focus: Option<RowFocus>) {
+        let revision = Some(self.lessons.revision());
+        if self.rendered_revision.replace(revision) == revision && focus.is_none() {
+            return;
+        }
         for group in [&self.open, &self.done] {
             while let Some(row) = group.first_child() {
                 group.remove(&row);

@@ -1,6 +1,6 @@
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 use std::cell::{Cell, Ref, RefCell};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::rc::Rc;
 
 use crate::forms::{HOMEWORK_LIMIT, SUBJECT_LIMIT, length_error};
@@ -36,6 +36,67 @@ struct PendingHomework {
 pub struct SchoolData {
     lessons: Vec<Lesson>,
     pending_homework: Vec<PendingHomework>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    days: BTreeMap<NaiveDate, DayOptions>,
+}
+
+pub const MAX_SHORT_MINUTES: u16 = 1439;
+pub const NOTE_LIMIT: usize = 240;
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct DayOptions {
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub remote: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub short_minutes: Option<u16>,
+}
+
+impl DayOptions {
+    fn validate(self) -> Result<(), String> {
+        if self
+            .short_minutes
+            .is_some_and(|minutes| !(1..=MAX_SHORT_MINUTES).contains(&minutes))
+        {
+            return Err("Укажите длительность урока от 1 до 1439 минут".into());
+        }
+        Ok(())
+    }
+
+    pub fn end_time(self, lesson: &Lesson) -> NaiveTime {
+        self.short_minutes.map_or(lesson.end, |minutes| {
+            let (end, overflow) = lesson
+                .time
+                .overflowing_add_signed(chrono::Duration::minutes(minutes.into()));
+            if overflow == 0 {
+                lesson.end.min(end)
+            } else {
+                lesson.end
+            }
+        })
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LessonWork {
+    #[default]
+    Regular,
+    Test,
+    Independent,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
+pub struct LessonOptions {
+    pub cancelled: bool,
+    pub replacement: String,
+    pub work: LessonWork,
+}
+
+impl LessonOptions {
+    fn is_default(&self) -> bool {
+        *self == Self::default()
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -88,6 +149,7 @@ pub struct Lessons(Rc<LessonList>);
 struct LessonList {
     data: RefCell<SchoolData>,
     next_id: Cell<RecordId>,
+    revision: Cell<u64>,
     practice_changed: Option<Box<dyn Fn()>>,
     restored: RefCell<Vec<RestoreCallback>>,
 }
@@ -104,6 +166,7 @@ impl Lessons {
         Self(Rc::new(LessonList {
             data: RefCell::new(data),
             next_id: Cell::new(next_id.next().unwrap()),
+            revision: Cell::new(0),
             practice_changed: None,
             restored: RefCell::new(Vec::new()),
         }))
@@ -113,6 +176,7 @@ impl Lessons {
         Self(Rc::new(LessonList {
             data: RefCell::new(SchoolData::default()),
             next_id: Cell::new(1),
+            revision: Cell::new(0),
             practice_changed: Some(Box::new(on_change)),
             restored: RefCell::new(Vec::new()),
         }))
@@ -120,6 +184,43 @@ impl Lessons {
 
     pub fn borrow(&self) -> Ref<'_, Vec<Lesson>> {
         Ref::map(self.0.data.borrow(), |data| &data.lessons)
+    }
+
+    pub fn on_date(&self, date: NaiveDate) -> Ref<'_, [Lesson]> {
+        Ref::map(self.0.data.borrow(), |data| {
+            let lessons = &data.lessons;
+            let first = lessons.partition_point(|lesson| lesson.date < date);
+            let count = lessons[first..].partition_point(|lesson| lesson.date == date);
+            &lessons[first..first + count]
+        })
+    }
+
+    pub fn revision(&self) -> u64 {
+        self.0.revision.get()
+    }
+
+    pub fn day_options(&self, date: NaiveDate) -> DayOptions {
+        self.0
+            .data
+            .borrow()
+            .days
+            .get(&date)
+            .copied()
+            .unwrap_or_default()
+    }
+
+    pub fn set_day_options(&self, date: NaiveDate, options: DayOptions) -> Result<(), String> {
+        options.validate()?;
+        if self.day_options(date) == options {
+            return Ok(());
+        }
+        let mut data = self.0.data.borrow().clone();
+        if options == DayOptions::default() {
+            data.days.remove(&date);
+        } else {
+            data.days.insert(date, options);
+        }
+        self.replace(data)
     }
 
     pub fn is_practice(&self) -> bool {
@@ -134,13 +235,14 @@ impl Lessons {
 
     fn replace(&self, updated: SchoolData) -> Result<(), String> {
         if !self.is_practice() {
-            if updated.pending_homework.is_empty() {
+            if updated.pending_homework.is_empty() && updated.days.is_empty() {
                 crate::storage::save_json("lessons.json", &updated.lessons)?;
             } else {
                 crate::storage::save_json("lessons.json", &updated)?;
             }
         }
         *self.0.data.borrow_mut() = updated;
+        self.0.revision.set(self.revision().wrapping_add(1));
         if let Some(on_change) = &self.0.practice_changed {
             on_change();
         }
@@ -156,7 +258,12 @@ pub struct Lesson {
     pub date: NaiveDate,
     pub time: NaiveTime,
     pub end: NaiveTime,
+    #[serde(default)]
     pub room: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub note: String,
+    #[serde(default, skip_serializing_if = "LessonOptions::is_default")]
+    pub options: LessonOptions,
     #[serde(default)]
     pub homework: String,
 
@@ -186,9 +293,6 @@ impl Lesson {
         if title.is_empty() {
             return Err("Введите название предмета".to_string());
         }
-        if room.is_empty() {
-            return Err("Введите кабинет".to_string());
-        }
         let lesson = Self {
             id: 0,
             title: title.to_string(),
@@ -196,6 +300,8 @@ impl Lesson {
             time,
             end,
             room: room.to_string(),
+            note: String::new(),
+            options: LessonOptions::default(),
             homework: String::new(),
             homework_completed: false,
         };
@@ -222,14 +328,25 @@ pub fn parse_lesson(
 }
 
 fn validate_lesson(lesson: &Lesson) -> Result<(), String> {
-    if [&lesson.title, &lesson.room, &lesson.homework]
-        .iter()
-        .any(|text| text.contains('\0'))
+    if [
+        &lesson.title,
+        &lesson.room,
+        &lesson.homework,
+        &lesson.note,
+        &lesson.options.replacement,
+    ]
+    .iter()
+    .any(|text| text.contains('\0'))
     {
         return Err("Недопустимые символы в данных урока".to_string());
     }
-    if lesson.title.trim().is_empty() || lesson.room.trim().is_empty() {
-        return Err("Укажите предмет и кабинет".to_string());
+    if lesson.title.trim().is_empty() {
+        return Err("Укажите предмет".to_string());
+    }
+    if let Some(error) = length_error(&lesson.note, "", NOTE_LIMIT)
+        .or_else(|| length_error(&lesson.options.replacement, "", SUBJECT_LIMIT))
+    {
+        return Err(error);
     }
     if lesson.end <= lesson.time {
         return Err("Время окончания должно быть позже начала".to_string());
@@ -274,6 +391,9 @@ fn validate_saved(saved: &mut SavedData) -> Result<(), String> {
     let lessons = match saved {
         SavedData::Legacy(lessons) => lessons,
         SavedData::Current(data) => {
+            for options in data.days.values() {
+                options.validate()?;
+            }
             for task in &data.pending_homework {
                 validate_pending(&task.title, &task.body)?;
             }
@@ -672,13 +792,17 @@ mod tests {
         let lesson = Lesson::new("  Физика  ", date, start, end, "  23  ")?;
         assert_eq!(lesson.title, "Физика");
         assert_eq!(lesson.room, "23");
+        assert!(
+            Lesson::new("Физика", date, start, end, " ")?
+                .room
+                .is_empty()
+        );
         assert_eq!((lesson.date, lesson.time, lesson.end), (date, start, end));
         assert_eq!(lesson.id, 0);
         assert!(lesson.homework.is_empty());
         assert!(!lesson.homework_completed);
         for (title, room, finish, error) in [
             (" ", "23", end, "Введите название предмета"),
-            ("Физика", " ", end, "Введите кабинет"),
             ("Физика\0", "23", end, "Недопустимые символы в данных урока"),
             (
                 "Физика",
@@ -692,6 +816,87 @@ mod tests {
                 error
             );
         }
+        Ok(())
+    }
+
+    #[test]
+    fn date_options_and_lesson_details_round_trip_without_changing_originals() -> Result<(), String>
+    {
+        let legacy = r#"[
+            {"title":"Математика","date":"2026-11-10","time":"08:00:00","end":"08:40:00","homework":"Задача","homework_completed":true},
+            {"title":"Математика","date":"2026-11-17","time":"08:00:00","end":"08:40:00","room":"23"}
+        ]"#;
+        let mut data = serde_json::from_str::<SavedData>(legacy).unwrap();
+        validate_saved(&mut data)?;
+        let SavedData::Legacy(lessons) = data else {
+            unreachable!()
+        };
+        let date = lessons[0].date;
+        let other = lessons[1].date;
+        let items = Lessons::practice(|| {});
+        for lesson in lessons {
+            items.store_lesson(lesson, None)?;
+        }
+        let mut lesson = items.on_date(date)[0].clone();
+        assert!(lesson.room.is_empty());
+        assert_eq!(lesson.options, LessonOptions::default());
+        lesson.note = "Принести атлас".into();
+        lesson.options = LessonOptions {
+            cancelled: true,
+            replacement: "Физика".into(),
+            work: LessonWork::Independent,
+        };
+        items.store_lesson(lesson.clone(), Some(lesson.id))?;
+        let options = DayOptions {
+            remote: true,
+            short_minutes: Some(30),
+        };
+        items.set_day_options(date, options)?;
+        assert!(
+            items
+                .set_day_options(
+                    other,
+                    DayOptions {
+                        remote: true,
+                        short_minutes: Some(0)
+                    }
+                )
+                .is_err()
+        );
+
+        let json = serde_json::to_string(&*items.0.data.borrow()).unwrap();
+        let mut saved = serde_json::from_str::<SavedData>(&json).unwrap();
+        validate_saved(&mut saved)?;
+        let SavedData::Current(data) = saved else {
+            unreachable!()
+        };
+        let persisted = Lessons::new(data);
+        assert_eq!(persisted.day_options(date), options);
+        assert_eq!(persisted.day_options(other), DayOptions::default());
+        assert_eq!(
+            options.end_time(&persisted.on_date(date)[0]),
+            NaiveTime::from_hms_opt(8, 30, 0).unwrap()
+        );
+        assert_eq!(persisted.on_date(date)[0], lesson);
+        assert_eq!(persisted.on_date(other)[0].room, "23");
+        assert_eq!(
+            persisted.on_date(other)[0].options,
+            LessonOptions::default()
+        );
+        assert_eq!(persisted.homework()[0].body, "Задача");
+        assert!(persisted.homework()[0].completed);
+
+        items.set_day_options(date, DayOptions::default())?;
+        assert!(items.0.data.borrow().days.is_empty());
+        assert_eq!(items.day_options(date).end_time(&lesson), lesson.end);
+        assert_eq!(
+            DayOptions {
+                short_minutes: Some(60),
+                ..options
+            }
+            .end_time(&lesson),
+            lesson.end
+        );
         Ok(())
     }
 
@@ -1015,6 +1220,7 @@ mod tests {
                 body: "Новое ДЗ".into(),
                 completed: true,
             }],
+            ..SchoolData::default()
         };
         let json = serde_json::to_string(&data).unwrap();
         let mut saved = serde_json::from_str::<SavedData>(&json).unwrap();

@@ -76,3 +76,40 @@ entry:focus-within { border-color: alpha(@window_fg_color, 0.55); }
 .update-card, .update-card label, .update-card image { color: @popover_fg_color; }
 .update-card button.primary { background: @accent_bg_color; color: @accent_fg_color; border: none; }
 .update-card button.primary label { color: @accent_fg_color; }
+
+.day-options.day-configured > button {
+    box-shadow: inset 0 0 0 1px alpha(@blue_3, 0.55);
+}
+
+.remote-day {
+    background-color: alpha(@blue_3, 0.14);
+    border-radius: 6px;
+    padding: 4px;
+}
+
+.lesson-badge {
+    border: 1px solid alpha(@window_fg_color, 0.16);
+    border-radius: 5px;
+    padding: 1px 5px;
+    font-size: 0.82em;
+    font-weight: 600;
+}
+
+.lesson-badge.schoolwork {
+    background-color: alpha(@blue_3, 0.18);
+    border-color: alpha(@blue_3, 0.48);
+}
+
+.lesson-badge.cancelled {
+    background-color: alpha(@error_color, 0.14);
+    border-color: alpha(@error_color, 0.4);
+}
+
+.lesson-cancelled .lesson-title,
+.lesson-cancelled .lesson-badge:not(.cancelled) {
+    opacity: 0.58;
+}
+
+.lesson-cancelled .lesson-details .muted {
+    opacity: 0.53;
+}
