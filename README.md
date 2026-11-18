@@ -23,7 +23,7 @@
 **Linux x86_64:** установите [Flatpak](https://flathub.org/en/setup) и [скачайте пакет](https://github.com/sqeezy-53/school-day/releases/download/v0.6.2/school-day-0.6.2-x86_64.flatpak).
 
 ```sh
-flatpak install --user ./school-day-0.6.1-x86_64.flatpak
+flatpak install --user ./school-day-0.6.2-x86_64.flatpak
 flatpak run io.github.sqeezy_53.school-day
 ```
 
