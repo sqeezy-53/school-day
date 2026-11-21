@@ -1,6 +1,6 @@
 use serde::{Serialize, de::DeserializeOwned};
 use std::fs::{File, OpenOptions, TryLockError};
-use std::io::{self, Read, Write};
+use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 
 const MAX_JSON_BYTES: u64 = 32 * 1024 * 1024;
@@ -18,7 +18,7 @@ pub fn log_update_error(message: &str) {
 
 fn append_update_error(message: &str) -> io::Result<()> {
     let mut options = local_file_options();
-    options.create(true).append(true);
+    options.create(true).write(true).truncate(false);
     #[cfg(unix)]
     {
         use std::os::unix::fs::OpenOptionsExt;
@@ -37,6 +37,7 @@ fn append_update_error(message: &str) -> io::Result<()> {
     if metadata.len().saturating_add(line.len() as u64) > MAX_UPDATE_LOG_BYTES {
         log.set_len(0)?;
     }
+    log.seek(SeekFrom::End(0))?;
     log.write_all(line.as_bytes())
 }
 
