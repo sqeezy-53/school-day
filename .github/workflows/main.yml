@@ -34,6 +34,7 @@ jobs:
           git config --system --add safe.directory "$GITHUB_WORKSPACE"
           git rev-parse --show-toplevel
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test -z "$(git status --porcelain)"
           if [ "$GITHUB_REF_TYPE" = tag ]; then
             version=$(python3 -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["package"]["version"])')
             test "$GITHUB_REF_NAME" = "v$version"
@@ -57,19 +58,28 @@ jobs:
         run: |
           python3 packaging/build-windows.py \
           --work-dir "$RUNNER_TEMP/school-day-build" \
-          --output-dir "$GITHUB_WORKSPACE/artifacts" \
+          --output-dir "$RUNNER_TEMP/windows-artifacts" \
           --cross-bin /usr/bin \
           --makensis /usr/bin/makensis \
           --nsis-dir /usr/share/nsis \
           --cross-prefix x86_64-w64-mingw32ucrt-
-          
+
       - name: Проверить файлы сборки
         run: |
-          cd artifacts
+          cd "$RUNNER_TEMP/windows-artifacts"
           sha256sum --check SHA256SUMS-windows
+          python3 - <<'PY'
+          import json
+          import os
+
+          with open("SOURCE-windows.json") as stream:
+              source = json.load(stream)
+          if source["base_commit"] != os.environ["GITHUB_SHA"] or source["working_tree_dirty"]:
+              raise SystemExit("Сборка должна использовать чистый коммит запуска")
+          PY
       - name: Сохранить файлы сборки
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: school-day-windows
-          path: artifacts/
+          path: ${{ runner.temp }}/windows-artifacts/
           if-no-files-found: error

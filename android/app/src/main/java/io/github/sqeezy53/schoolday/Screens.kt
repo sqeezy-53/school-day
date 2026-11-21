@@ -508,7 +508,7 @@ internal fun PreferencesScreen(
                 HorizontalDivider()
                 ListItem(
                     headlineContent = { Text("School Day") },
-                    supportingContent = { Text("${BuildConfig.VERSION_NAME} · Android Alpha") },
+                    supportingContent = { Text(BuildConfig.VERSION_NAME) },
                     colors =
                         ListItemDefaults.colors(
                             containerColor = MaterialTheme.colorScheme.surfaceContainerLow
@@ -527,7 +527,7 @@ internal fun PreferencesScreen(
             title = { Text("School Day") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Версия ${BuildConfig.VERSION_NAME} · Android Alpha")
+                    Text("Версия ${BuildConfig.VERSION_NAME}")
                     if (showDeviceId) Text(store.deviceId)
                     else
                         TextButton(onClick = { showDeviceId = true }) {
