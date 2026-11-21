@@ -2,7 +2,7 @@ window { background: @window_bg_color; color: @window_fg_color; }
 headerbar { background: @headerbar_bg_color; box-shadow: none; border-bottom: 1px solid alpha(@window_fg_color, 0.10); min-height: 48px; }
 .brand { font-size: 12px; font-weight: 600; opacity: 0.65; }
 .brand-logo { color: @headerbar_fg_color; background: alpha(@headerbar_fg_color, 0.12); border-radius: 5px; }
-.page-title { font-size: 23px; font-weight: 600; letter-spacing: -0.4px; }
+.page-title { font-size: 23px; font-weight: 600; padding: 0 1px; }
 .muted { opacity: 0.60; }
 .section { font-size: 13px; font-weight: 500; }
 .navigation { padding: 3px; border-radius: 10px; background: alpha(@headerbar_fg_color, 0.06); border: 1px solid alpha(@headerbar_fg_color, 0.10); }
@@ -116,6 +116,7 @@ entry:focus-within { border-color: alpha(@window_fg_color, 0.55); }
 .panel.dense { padding-top: 2px; padding-bottom: 2px; }
 
 .schedule-lesson { border: none; padding: 14px 0; }
+.schedule-lesson .lesson-time { font-feature-settings: "tnum"; padding: 0 1px; }
 .schedule-lesson.dense { padding: 5px 0; }
 .schedule-lesson .lesson-details > .muted { font-size: 0.93em; }
 .schedule-lesson .lesson-title { font-size: 15px; font-weight: 600; }

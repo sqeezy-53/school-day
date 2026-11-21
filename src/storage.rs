@@ -4,9 +4,40 @@ use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 
 const MAX_JSON_BYTES: u64 = 32 * 1024 * 1024;
+const MAX_UPDATE_LOG_BYTES: u64 = 64 * 1024;
 
 pub fn data_dir() -> PathBuf {
     gtk::glib::user_data_dir().join("school-day")
+}
+
+pub fn log_update_error(message: &str) {
+    if let Err(error) = append_update_error(message) {
+        eprintln!("Не удалось записать журнал обновлений: {error}. {message}");
+    }
+}
+
+fn append_update_error(message: &str) -> io::Result<()> {
+    let mut options = local_file_options();
+    options.create(true).append(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut log = options.open(data_dir().join("updates.log"))?;
+    let metadata = log.metadata()?;
+    require_regular_file(&metadata)?;
+    let message: String = message
+        .replace(['\r', '\n'], " ")
+        .chars()
+        .take(2048)
+        .collect();
+    let now = chrono::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, false);
+    let line = format!("[{now}] {message}\n");
+    if metadata.len().saturating_add(line.len() as u64) > MAX_UPDATE_LOG_BYTES {
+        log.set_len(0)?;
+    }
+    log.write_all(line.as_bytes())
 }
 
 pub fn lock_data() -> Result<File, String> {

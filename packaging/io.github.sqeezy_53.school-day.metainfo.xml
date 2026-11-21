@@ -27,6 +27,12 @@
   </categories>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="1.0.1" date="2026-11-21">
+      <description>
+        <p>Fixed clipped lesson times and page titles, simplified update messages and theme settings.</p>
+        <p xml:lang="ru">Исправлено обрезание времени и заголовков, упрощены сообщения об обновлениях и выбор темы.</p>
+      </description>
+    </release>
     <release version="1.0.0" date="2026-11-21">
       <description>
         <p>New Android app, automatic synchronization over the local network, and improved settings and backups.</p>

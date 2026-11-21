@@ -6,7 +6,8 @@ use std::{
     rc::Rc,
 };
 const BUS: &str = "org.freedesktop.portal.Flatpak";
-const WAITING: &str = "Ожидание сведений от источника Flatpak…";
+const RESTART: &str = "Перезапустите приложение";
+const INSTALL_FAILED: &str = "Не удалось установить обновление";
 const MONITOR: &str = "org.freedesktop.portal.Flatpak.UpdateMonitor";
 type Options = HashMap<String, glib::Variant>;
 
@@ -34,7 +35,7 @@ impl Drop for Monitor {
 async fn watch(
     label: gtk::glib::WeakRef<gtk::Label>,
     install: gtk::glib::WeakRef<gtk::Button>,
-    indicator: gtk::glib::WeakRef<gtk::MenuButton>,
+    dot: gtk::glib::WeakRef<gtk::Box>,
     current: Rc<Cell<u64>>,
     ticket: u64,
 ) -> Result<Monitor, String> {
@@ -50,45 +51,69 @@ async fn watch(
         name.trim_start_matches(':').replace('.', "_"),
         token
     );
-    let signals=bus.subscribe_to_signal(
-        Some(BUS),Some(MONITOR),None,Some(&path),None,gio::DBusSignalFlags::NONE,
-        move |signal|{
-            if current.get()!=ticket{return;}
-            let (Some(label),Some(install),Some((info,)))=(label.upgrade(),install.upgrade(),signal.parameters.get::<(Options,)>()) else{return;};
+    let signals = bus.subscribe_to_signal(
+        Some(BUS),
+        Some(MONITOR),
+        None,
+        Some(&path),
+        None,
+        gio::DBusSignalFlags::NONE,
+        move |signal| {
+            if current.get() != ticket {
+                return;
+            }
+            let (Some(label), Some(install), Some((info,))) = (
+                label.upgrade(),
+                install.upgrade(),
+                signal.parameters.get::<(Options,)>(),
+            ) else {
+                return;
+            };
             match signal.signal_name {
                 "UpdateAvailable" => {
-                    let field=|key|info.get(key).and_then(|v|v.get::<String>()).filter(|s|!s.is_empty());
-                    let running=field("running-commit");
-                    let local=field("local-commit");
-                    let remote=field("remote-commit");
-                    let available=remote.is_some() && remote!=local;
+                    let field = |key| {
+                        info.get(key)
+                            .and_then(|v| v.get::<String>())
+                            .filter(|s| !s.is_empty())
+                    };
+                    let running = field("running-commit");
+                    let local = field("local-commit");
+                    let remote = field("remote-commit");
+                    let available = remote.is_some() && remote != local;
                     install.set_visible(available);
                     install.set_sensitive(true);
                     label.set_label(if available {
-                        "Доступно обновление из источника Flatpak"
-                    }else if let (Some(running),Some(local))=(running,local) && running!=local {
-                        "Обновление установлено. Перезапустите приложение."
-                    }else{
-                        "Flatpak пока не сообщил о доступном обновлении."
+                        "Доступно обновление"
+                    } else if let (Some(running), Some(local)) = (running, local)
+                        && running != local
+                    {
+                        RESTART
+                    } else {
+                        super::UP_TO_DATE
                     });
-                    set_icon(&indicator,available);
+                    set_badge(&dot, available);
                 }
-                "Progress" => {
-                    match info.get("status").and_then(|s|s.get::<u32>()){
-                        Some(0) => label.set_label("Flatpak устанавливает обновление…"),
-                        Some(status @ (1|2)) => {
-                            label.set_label(if status==2 {"Обновление установлено. Перезапустите приложение."}else{"Обновлений для установки нет."});
-                            install.set_visible(false);
-                            set_icon(&indicator,false);
-                        }
-                        Some(3) => {
-                            label.set_label("Flatpak не завершил обновление. Проверьте интернет и источник в центре приложений.");
-                            install.set_sensitive(true);
-                        }
-                        _=>{}
+                "Progress" => match info.get("status").and_then(|s| s.get::<u32>()) {
+                    Some(0) => label.set_label("Устанавливаем обновление…"),
+                    Some(status @ (1 | 2)) => {
+                        label.set_label(if status == 2 {
+                            RESTART
+                        } else {
+                            super::UP_TO_DATE
+                        });
+                        install.set_visible(false);
+                        set_badge(&dot, false);
                     }
-                }
-                _=>{}
+                    Some(3) => {
+                        crate::storage::log_update_error(&format!(
+                            "Установка обновления Flatpak: {info:?}"
+                        ));
+                        label.set_label(INSTALL_FAILED);
+                        install.set_sensitive(true);
+                    }
+                    _ => {}
+                },
+                _ => {}
             }
         },
     );
@@ -116,13 +141,9 @@ async fn watch(
         _signals: signals,
     })
 }
-fn set_icon(button: &glib::WeakRef<gtk::MenuButton>, available: bool) {
-    if let Some(button) = button.upgrade() {
-        button.set_icon_name(if available && crate::settings::display().update_badge {
-            "software-update-available-symbolic"
-        } else {
-            "folder-download-symbolic"
-        });
+fn set_badge(dot: &glib::WeakRef<gtk::Box>, available: bool) {
+    if let Some(dot) = dot.upgrade() {
+        dot.set_visible(available && crate::settings::display().update_badge);
     }
 }
 
@@ -131,38 +152,29 @@ pub fn indicator(
     badge: bool,
     save: impl Fn(super::Preference, bool) -> Result<(), String> + 'static,
 ) -> gtk::MenuButton {
-    let button = gtk::MenuButton::builder()
-        .icon_name("folder-download-symbolic")
-        .tooltip_text("Обновления Flatpak")
-        .build();
-    button.set_halign(gtk::Align::Start);
-    button.add_css_class("flat");
-    button.add_css_class("update-indicator");
-    let (_, body, check) =
-        super::popover_parts(&button, &format!("Версия {} · Flatpak", super::VERSION));
+    let (button, dot) = super::indicator_button();
+    let (_, body, check) = super::popover_parts(&button, &format!("Версия {}", super::VERSION));
     let preferences = crate::column(4);
     let auto = super::preference_switch(&preferences, "Проверять при запуске", automatic);
     body.append(&preferences);
-    let feedback = crate::text(
-        "Обновления поступают из подключённого источника Flatpak.",
-        "muted",
-    );
+    let feedback = crate::text("", "muted");
+    feedback.set_visible(false);
     feedback.set_max_width_chars(32);
     body.append(&feedback);
-    let install = gtk::Button::with_label("Установить через Flatpak");
+    let install = gtk::Button::with_label("Установить");
     install.set_visible(false);
     body.append(&install);
     let save = Rc::new(save);
     let save_badge = Rc::clone(&save);
     let update = install.downgrade();
-    let badge_button = button.downgrade();
+    let badge_dot = dot.downgrade();
     super::append_badge_switch(
         &preferences,
         badge,
         move |value| {
             save_badge(super::Preference::Badge, value)?;
-            set_icon(
-                &badge_button,
+            set_badge(
+                &badge_dot,
                 update.upgrade().is_some_and(|button| button.is_visible()),
             );
             Ok(())
@@ -171,20 +183,16 @@ pub fn indicator(
     );
     let state = Rc::new(RefCell::new(None::<Monitor>));
     let generation = Rc::new(Cell::new(0u64));
-    let (label, action, icon) = (
-        feedback.downgrade(),
-        install.downgrade(),
-        button.downgrade(),
-    );
+    let (label, action, icon) = (feedback.downgrade(), install.downgrade(), dot.downgrade());
     let (holder, counter) = (state.clone(), generation.clone());
     let start = Rc::new(move || {
         holder.borrow_mut().take();
         counter.set(counter.get().wrapping_add(1));
         let ticket = counter.get();
         if let Some(label) = label.upgrade() {
-            label.set_label(WAITING);
-            set_icon(&icon, false);
+            crate::notify(&label, super::CHECKING);
         }
+        set_badge(&icon, false);
         if let Some(action) = action.upgrade() {
             action.set_visible(false);
         }
@@ -205,15 +213,20 @@ pub fn indicator(
                     *holder.borrow_mut() = Some(m);
                     glib::timeout_add_seconds_local_once(12, move || {
                         if counter.get() == ticket
-                            && let Some(label) = label.upgrade().filter(|l| l.label() == WAITING)
+                            && let Some(label) =
+                                label.upgrade().filter(|l| l.label() == super::CHECKING)
                         {
-                            label.set_label("Источник пока не ответил. Проверьте подключение и источник в центре приложений.");
+                            eprintln!(
+                                "Проверка обновлений Flatpak: портал не прислал ответ за 12 секунд"
+                            );
+                            label.set_label(super::CHECK_FAILED);
                         }
                     });
                 }
                 Err(e) => {
+                    crate::storage::log_update_error(&format!("Проверка обновлений Flatpak: {e}"));
                     if let Some(label) = label.upgrade() {
-                        label.set_label(&format!("Источник обновлений недоступен: {e}"));
+                        label.set_label(super::CHECK_FAILED);
                     }
                 }
             }
@@ -226,6 +239,7 @@ pub fn indicator(
     }
     let holder = state.clone();
     let weak = feedback.downgrade();
+    let auto_dot = dot.downgrade();
     let saved = Cell::new(automatic);
     let auto_action = install.downgrade();
     auto.connect_active_notify(move |check| {
@@ -244,15 +258,19 @@ pub fn indicator(
                     if let Some(b) = auto_action.upgrade() {
                         b.set_visible(false);
                     }
+                    set_badge(&auto_dot, false);
                     if let Some(l) = weak.upgrade() {
-                        l.set_label("Автоматическая проверка выключена");
+                        l.set_visible(false);
                     }
                 }
             }
             Err(e) => {
+                crate::storage::log_update_error(&format!(
+                    "Настройка проверки обновлений Flatpak: {e}"
+                ));
                 check.set_active(saved.get());
                 if let Some(l) = weak.upgrade() {
-                    l.set_label(&e);
+                    crate::notify(&l, super::SAVE_FAILED);
                 }
             }
         }
@@ -277,8 +295,11 @@ pub fn indicator(
             None::<&gio::Cancellable>,
             move |result| {
                 if let Err(e) = result {
+                    crate::storage::log_update_error(&format!(
+                        "Запрос установки обновления Flatpak: {e}"
+                    ));
                     if let Some(label) = label.upgrade() {
-                        label.set_label(&e.to_string());
+                        label.set_label(INSTALL_FAILED);
                     }
                     if let Some(b) = action.upgrade() {
                         b.set_sensitive(true);

@@ -9,10 +9,37 @@ use crate::{column, notify, primary, text};
 
 pub use school_day_core::settings::*;
 pub fn load_settings() -> Result<Settings, String> {
-    Ok(
-        crate::storage::load_json("settings.json", |settings| validate(settings))?
-            .unwrap_or_default(),
-    )
+    let migrated = Cell::new(false);
+    let settings = crate::storage::load_json("settings.json", |settings| {
+        migrated.set(migrate_theme(settings, chrono::Local::now().time()));
+        validate(settings)
+    })?
+    .unwrap_or_else(default_settings);
+    if migrated.get()
+        && let Err(error) = save_settings(&settings)
+    {
+        eprintln!("Не удалось сохранить тему после обновления: {error}");
+    }
+    Ok(settings)
+}
+
+fn default_settings() -> Settings {
+    Settings {
+        theme: Theme::Light,
+        ..Settings::default()
+    }
+}
+
+fn migrate_theme(settings: &mut Settings, now: NaiveTime) -> bool {
+    if settings.theme != Theme::Auto {
+        return false;
+    }
+    settings.theme = if settings.is_dark_at(now) {
+        Theme::Dark
+    } else {
+        Theme::Light
+    };
+    true
 }
 
 fn save_settings(settings: &Settings) -> Result<(), String> {
@@ -41,7 +68,7 @@ pub fn set_display(value: DisplayOptions) {
 }
 
 pub fn apply_color_scheme(settings: &Settings) {
-    let scheme = if settings.is_dark_at(chrono::Local::now().time()) {
+    let scheme = if settings.theme == Theme::Dark {
         adw::ColorScheme::ForceDark
     } else {
         adw::ColorScheme::ForceLight
@@ -61,26 +88,6 @@ fn apply_settings(settings: &Settings, brand: &gtk::Label) {
 
     brand.set_text(&title);
     brand.set_tooltip_text(Some(&title));
-}
-
-fn time_field(title: &str, value: NaiveTime) -> (gtk::Box, gtk::SpinButton, gtk::SpinButton) {
-    use chrono::Timelike;
-
-    let group = column(8);
-    group.append(&text(title, "section"));
-
-    let row = gtk::Box::new(gtk::Orientation::Horizontal, 6);
-
-    let hour = forms::time_input(23.0, value.hour(), &format!("{title}: часы"));
-    let minute = forms::time_input(59.0, value.minute(), &format!("{title}: минуты"));
-
-    row.append(&hour);
-    row.append(&text(":", "muted"));
-    row.append(&minute);
-
-    group.append(&row);
-
-    (group, hour, minute)
 }
 
 pub fn settings_page(
@@ -146,7 +153,7 @@ fn settings_form(
                 let Some(container) = container.upgrade() else {
                     return;
                 };
-                match crate::storage::reset_json("settings.json", &Settings::default()) {
+                match crate::storage::reset_json("settings.json", &default_settings()) {
                     Ok(backup) => {
                         while let Some(child) = container.first_child() {
                             container.remove(&child);
@@ -197,33 +204,17 @@ fn settings_form(
     class_error.set_visible(false);
     page.append(&class_error);
 
-    let theme = gtk::DropDown::from_strings(&["Светлая", "Тёмная", "Авто"]);
+    let theme = gtk::DropDown::from_strings(&["Светлая", "Тёмная"]);
     theme.set_widget_name("settings-theme");
     crate::forms::guard_wheel(&theme);
 
-    theme.set_selected(match loaded.theme {
-        Theme::Light => 0,
-        Theme::Dark => 1,
-        Theme::Auto => 2,
-    });
+    theme.set_selected(u32::from(loaded.theme == Theme::Dark));
 
     theme.set_valign(gtk::Align::Center);
     let theme_row = adw::ActionRow::builder().title("Тема").build();
     theme_row.add_suffix(&theme);
     general.add(&theme_row);
     Anchor::Theme.mark(&theme);
-
-    let automatic = adw::WrapBox::new();
-    automatic.set_child_spacing(24);
-    automatic.set_line_spacing(12);
-
-    let (light_group, light_hour, light_minute) = time_field("Светлая с", loaded.light_from);
-
-    let (dark_group, dark_hour, dark_minute) = time_field("Тёмная с", loaded.dark_from);
-
-    automatic.append(&light_group);
-    automatic.append(&dark_group);
-    automatic.set_visible(loaded.theme == Theme::Auto);
 
     let hide_old = adw::SwitchRow::builder()
         .title("Автоматически скрывать старые уроки")
@@ -253,14 +244,6 @@ fn settings_form(
     let weak_hide_old = hide_old.downgrade();
     let weak_days = days.downgrade();
 
-    let weak_times = [
-        light_hour.downgrade(),
-        light_minute.downgrade(),
-        dark_hour.downgrade(),
-        dark_minute.downgrade(),
-    ];
-
-    let weak_automatic = automatic.downgrade();
     let weak_status = status.downgrade();
     let weak_brand = brand.downgrade();
 
@@ -279,7 +262,6 @@ fn settings_form(
             Some(theme),
             Some(status),
             Some(brand),
-            Some(automatic),
             Some(hide_old),
             Some(days),
         ) = (
@@ -288,29 +270,12 @@ fn settings_form(
             weak_theme.upgrade(),
             weak_status.upgrade(),
             weak_brand.upgrade(),
-            weak_automatic.upgrade(),
             weak_hide_old.upgrade(),
             weak_days.upgrade(),
         )
         else {
             return;
         };
-
-        let Some(times) = weak_times
-            .iter()
-            .map(|spin| spin.upgrade())
-            .collect::<Option<Vec<_>>>()
-        else {
-            return;
-        };
-
-        updating.set(true);
-
-        for spin in &times {
-            spin.update();
-        }
-
-        updating.set(false);
 
         let entered_class = class.text();
         let mut class_value = entered_class.trim().to_string();
@@ -326,36 +291,16 @@ fn settings_form(
             }
         }
         let candidate = Settings {
-            display: saved.borrow().display,
             class: class_value,
-
-            theme: match theme.selected() {
-                0 => Theme::Light,
-                1 => Theme::Dark,
-                _ => Theme::Auto,
+            theme: if theme.selected() == 1 {
+                Theme::Dark
+            } else {
+                Theme::Light
             },
-
-            light_from: NaiveTime::from_hms_opt(
-                times[0].value_as_int() as u32,
-                times[1].value_as_int() as u32,
-                0,
-            )
-            .unwrap(),
-
-            dark_from: NaiveTime::from_hms_opt(
-                times[2].value_as_int() as u32,
-                times[3].value_as_int() as u32,
-                0,
-            )
-            .unwrap(),
-
-            bells: saved.borrow().bells.clone(),
-            check_updates: saved.borrow().check_updates,
             hide_old_lessons: hide_old.is_active(),
             old_lesson_days: days.value().round() as u16,
+            ..saved.borrow().clone()
         };
-
-        automatic.set_visible(candidate.theme == Theme::Auto);
 
         if candidate == *saved.borrow() {
             status.set_visible(false);
@@ -371,26 +316,12 @@ fn settings_form(
             }
 
             Err(error) => {
-                use chrono::Timelike;
                 let old = saved.borrow();
                 updating.set(true);
                 class.set_text(&old.class);
-                theme.set_selected(match old.theme {
-                    Theme::Light => 0,
-                    Theme::Dark => 1,
-                    Theme::Auto => 2,
-                });
-                automatic.set_visible(old.theme == Theme::Auto);
+                theme.set_selected(u32::from(old.theme == Theme::Dark));
                 hide_old.set_active(old.hide_old_lessons);
                 days.set_value(f64::from(old.old_lesson_days));
-                for (spin, previous) in times.iter().zip([
-                    old.light_from.hour(),
-                    old.light_from.minute(),
-                    old.dark_from.hour(),
-                    old.dark_from.minute(),
-                ]) {
-                    spin.set_value(f64::from(previous));
-                }
                 updating.set(false);
                 notify(&status, &format!("Не удалось сохранить настройки: {error}"));
             }
@@ -406,11 +337,6 @@ fn settings_form(
 
     let callback = Rc::clone(&commit);
     theme.connect_selected_notify(move |_| callback());
-
-    for spin in [&light_hour, &light_minute, &dark_hour, &dark_minute] {
-        let callback = Rc::clone(&commit);
-        spin.connect_value_changed(move |_| callback());
-    }
 
     let callback = Rc::clone(&commit);
     let weak_days_row = days_row.downgrade();
@@ -519,6 +445,7 @@ fn settings_form(
             .and_downcast::<gtk::ScrolledWindow>()
         {
             scroll.vadjustment().set_value(0.0);
+            scroll.hadjustment().set_value(0.0);
         }
     });
 
@@ -556,7 +483,6 @@ fn settings_form(
             "",
         );
         match key {
-            "appearance" => group.add(&automatic),
             "schedule" => {
                 group.add(&hide_old);
                 group.add(&days_row);
@@ -652,24 +578,6 @@ fn settings_form(
         }
     }
 
-    let weak_brand = brand.downgrade();
-
-    let weak_page = page.downgrade();
-    gtk::glib::timeout_add_seconds_local(60, move || {
-        let Some(brand) = weak_brand
-            .upgrade()
-            .filter(|_| weak_page.upgrade().is_some())
-        else {
-            return gtk::glib::ControlFlow::Break;
-        };
-
-        if current.borrow().theme == Theme::Auto {
-            apply_settings(&current.borrow(), &brand);
-        }
-
-        gtk::glib::ControlFlow::Continue
-    });
-
     let layout = column(0);
     layout.append(&stack);
     layout
@@ -681,8 +589,12 @@ fn subpage(stack: &gtk::Stack, key: &str, title: &str, parent: &'static str) -> 
     let back = gtk::Button::from_icon_name("go-previous-symbolic");
     back.set_tooltip_text(Some("Назад к настройкам"));
     back.add_css_class("flat");
+    back.set_valign(gtk::Align::Center);
     header.append(&back);
-    header.append(&text(title, "page-title"));
+    let title = text(title, "page-title");
+    title.set_hexpand(true);
+    title.set_valign(gtk::Align::Center);
+    header.append(&title);
     page.append(&header);
     let weak = stack.downgrade();
     back.connect_clicked(move |_| {
@@ -869,6 +781,30 @@ mod tests {
                 settings.is_dark_at(NaiveTime::from_hms_opt(hour, minute, 0).unwrap()),
                 expected_dark
             );
+        }
+    }
+
+    #[test]
+    fn automatic_theme_migrates_once_and_preserves_other_preferences() {
+        let original: Settings = serde_json::from_str(
+            r#"{"class":"9Б","theme":"auto","light_from":"09:00:00","dark_from":"18:00:00",
+                "check_updates":true,"display":{"seasonal":"always","compact":true}}"#,
+        )
+        .unwrap();
+        for (hour, theme) in [(12, Theme::Light), (21, Theme::Dark)] {
+            let mut migrated = original.clone();
+            assert!(migrate_theme(
+                &mut migrated,
+                NaiveTime::from_hms_opt(hour, 0, 0).unwrap()
+            ));
+            let mut expected = original.clone();
+            expected.theme = theme;
+            assert!(migrated == expected);
+            assert!(!migrate_theme(
+                &mut migrated,
+                NaiveTime::from_hms_opt(0, 0, 0).unwrap()
+            ));
+            assert!(migrated == expected);
         }
     }
 

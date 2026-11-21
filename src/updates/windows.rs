@@ -260,7 +260,10 @@ impl super::UpdateView {
                 .and_then(|window| window.application())
             else {
                 *self.prepared.borrow_mut() = Some(prepared);
-                self.message("Не удалось закрыть приложение для обновления.");
+                crate::storage::log_update_error(
+                    "Установка обновления: не найдено окно приложения",
+                );
+                self.message("Не удалось запустить обновление");
                 return;
             };
             PENDING.with_borrow_mut(|pending| *pending = Some(prepared));
@@ -274,20 +277,22 @@ impl super::UpdateView {
             return;
         }
         if let Err(error) = installed_executable() {
-            self.message(&error);
+            crate::storage::log_update_error(&format!("Запуск обновления: {error}"));
+            self.message("Не удалось запустить обновление");
             return;
         }
         let spec = match self.release.borrow().as_ref().map(Release::installer) {
             Some(Ok(spec)) => spec,
             Some(Err(error)) => {
-                self.message(&error);
+                crate::storage::log_update_error(&format!("Поиск установщика обновления: {error}"));
+                self.message("Установщик недоступен");
                 return;
             }
             None => return,
         };
         let restore_focus = button.has_focus();
         self.set_busy(true);
-        self.message("Загружаем обновление…");
+        self.message("Загружаем…");
         let (sender, receiver) = std::sync::mpsc::channel();
         std::thread::spawn(move || {
             let result = download(spec, &sender);
@@ -321,10 +326,13 @@ impl super::UpdateView {
                                 if let Some(check) = view.check.upgrade() {
                                     check.set_sensitive(false);
                                 }
-                                view.message("Обновление скачано и проверено. Можно установить.");
+                                view.message("Готово к установке");
                             }
                             Err(error) => {
-                                view.message(&format!("Не удалось загрузить обновление: {error}"))
+                                crate::storage::log_update_error(&format!(
+                                    "Загрузка обновления: {error}"
+                                ));
+                                view.message("Не удалось скачать обновление");
                             }
                         }
                         super::restore_button_focus(&view.action, restore_focus);
@@ -338,7 +346,10 @@ impl super::UpdateView {
                         if let Some(progress) = view.progress.upgrade() {
                             progress.set_visible(false);
                         }
-                        view.message("Загрузка прервалась. Повторите попытку.");
+                        crate::storage::log_update_error(
+                            "Загрузка обновления: поток завершился без результата",
+                        );
+                        view.message("Не удалось скачать обновление");
                         super::restore_button_focus(&view.action, restore_focus);
                         return gtk::glib::ControlFlow::Break;
                     }

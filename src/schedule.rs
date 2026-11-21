@@ -741,9 +741,11 @@ fn render_lessons(
             row.add_css_class("dense");
         }
         row.set_visible(prefs.finished || lesson.date.and_time(options.end_time(lesson)) > now);
-        let time = text(&time_label(lesson, options), "muted");
+        let time = gtk::Label::new(Some(&time_label(lesson, options)));
+        time.add_css_class("muted");
+        time.add_css_class("lesson-time");
+        time.set_xalign(0.0);
         time.set_visible(prefs.times);
-        time.set_width_chars(5);
         time.set_valign(gtk::Align::Start);
         time.set_margin_top(2);
         row.append(&time);

@@ -16,6 +16,10 @@ mod windows;
 pub use windows::install_pending;
 
 const API: &str = "https://api.github.com/repos/sqeezy-53/school-day/releases/latest";
+const CHECKING: &str = "Проверяем обновления…";
+const CHECK_FAILED: &str = "Не удалось проверить обновления";
+const UP_TO_DATE: &str = "Установлена последняя версия";
+const SAVE_FAILED: &str = "Не удалось сохранить настройку";
 #[cfg(not(windows))]
 const RELEASES: &str = "https://github.com/sqeezy-53/school-day/releases";
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -155,24 +159,19 @@ fn append_badge_switch(
         match save(active) {
             Ok(()) => saved.set(active),
             Err(error) => {
+                crate::storage::log_update_error(&format!(
+                    "Настройка индикатора обновлений: {error}"
+                ));
                 check.set_active(saved.get());
                 if let Some(feedback) = feedback.upgrade() {
-                    notify(&feedback, &error);
+                    notify(&feedback, SAVE_FAILED);
                 }
             }
         }
     });
 }
 
-pub fn indicator(
-    automatic: bool,
-    badge: bool,
-    on_change: impl Fn(Preference, bool) -> Result<(), String> + 'static,
-) -> gtk::MenuButton {
-    #[cfg(target_os = "linux")]
-    if std::path::Path::new("/.flatpak-info").is_file() {
-        return flatpak::indicator(automatic, badge, on_change);
-    }
+fn indicator_button() -> (gtk::MenuButton, gtk::Box) {
     let indicator = gtk::MenuButton::new();
     indicator.set_direction(gtk::ArrowType::Up);
     let icon = gtk::DrawingArea::new();
@@ -180,8 +179,10 @@ pub fn indicator(
     icon.set_content_height(16);
     icon.set_halign(gtk::Align::Center);
     icon.set_valign(gtk::Align::Center);
-    icon.set_draw_func(|icon, context, _, _| {
+    icon.set_draw_func(|icon, context, width, height| {
         let color = icon.color();
+        let _ = context.save();
+        context.translate(f64::from(width - 16) / 2.0, f64::from(height - 16) / 2.0);
         context.set_source_rgba(
             color.red().into(),
             color.green().into(),
@@ -201,8 +202,11 @@ pub fn indicator(
         context.line_to(13.0, 14.0);
         context.line_to(13.0, 11.0);
         let _ = context.stroke();
+        let _ = context.restore();
     });
     let glyph = gtk::Overlay::new();
+    glyph.set_halign(gtk::Align::Center);
+    glyph.set_valign(gtk::Align::Center);
     glyph.set_child(Some(&icon));
     let dot = gtk::Box::new(gtk::Orientation::Horizontal, 0);
     dot.add_css_class("update-dot");
@@ -219,6 +223,19 @@ pub fn indicator(
     indicator.add_css_class("update-indicator");
     indicator.set_halign(gtk::Align::Start);
     indicator.set_valign(gtk::Align::Center);
+    (indicator, dot)
+}
+
+pub fn indicator(
+    automatic: bool,
+    badge: bool,
+    on_change: impl Fn(Preference, bool) -> Result<(), String> + 'static,
+) -> gtk::MenuButton {
+    #[cfg(target_os = "linux")]
+    if std::path::Path::new("/.flatpak-info").is_file() {
+        return flatpak::indicator(automatic, badge, on_change);
+    }
+    let (indicator, dot) = indicator_button();
     let (popover, root, check) = popover_parts(&indicator, &format!("Версия {VERSION}"));
     let preferences = column(4);
     root.append(&preferences);
@@ -313,10 +330,13 @@ pub fn indicator(
                         if let Some(button) = weak_button.upgrade() {
                             button.set_sensitive(true);
                         }
-                        if result.is_err()
-                            && let Some(view) = weak_view.upgrade()
-                        {
-                            view.message("Не удалось открыть браузер. Повторите попытку.");
+                        if let Err(error) = result {
+                            crate::storage::log_update_error(&format!(
+                                "Открытие страницы выпуска: {error}"
+                            ));
+                            if let Some(view) = weak_view.upgrade() {
+                                view.message("Не удалось открыть релиз");
+                            }
                         }
                     },
                 );
@@ -354,8 +374,11 @@ pub fn indicator(
                 }
             }
             Err(error) => {
+                crate::storage::log_update_error(&format!(
+                    "Настройка проверки обновлений: {error}"
+                ));
                 button.set_active(saved_automatic.get());
-                saving.message(&format!("Не удалось сохранить настройку: {error}"));
+                saving.message(SAVE_FAILED);
             }
         }
     });
@@ -443,7 +466,7 @@ impl UpdateView {
             .upgrade()
             .is_some_and(|button| button.has_focus());
         self.set_busy(true);
-        self.message("Проверяем обновления…");
+        self.message(CHECKING);
         self.clear_release();
         let (sender, receiver) = mpsc::channel();
         std::thread::spawn(move || {
@@ -460,15 +483,20 @@ impl UpdateView {
                     match result {
                         Ok(release) => view.show_release(release),
                         Err(error) => {
-                            eprintln!("Проверка обновлений: {error}");
-                            view.message("Не удалось проверить обновления. Проверьте подключение и повторите попытку.");
+                            crate::storage::log_update_error(&format!(
+                                "Проверка обновлений: {error}"
+                            ));
+                            view.message(CHECK_FAILED);
                         }
                     }
                 }
                 Err(mpsc::TryRecvError::Empty) => return gtk::glib::ControlFlow::Continue,
                 Err(mpsc::TryRecvError::Disconnected) => {
                     view.set_busy(false);
-                    view.message("Проверка прервалась. Повторите попытку.");
+                    crate::storage::log_update_error(
+                        "Проверка обновлений: поток завершился без результата",
+                    );
+                    view.message(CHECK_FAILED);
                 }
             }
             restore_button_focus(&view.check, restore_focus);
@@ -494,12 +522,16 @@ impl UpdateView {
 
     fn show_release(&self, release: Release) {
         let current = Version::parse(VERSION).expect("Некорректная версия приложения");
-        let Ok(version) = release.version() else {
-            self.message("Не удалось прочитать версию обновления.");
-            return;
+        let version = match release.version() {
+            Ok(version) => version,
+            Err(error) => {
+                crate::storage::log_update_error(&format!("Версия обновления: {error}"));
+                self.message(CHECK_FAILED);
+                return;
+            }
         };
         if version <= current {
-            self.message("Установлена последняя версия");
+            self.message(UP_TO_DATE);
             return;
         }
         let available = format!("Доступна версия {version}");
@@ -510,21 +542,19 @@ impl UpdateView {
         if let Some(dot) = self.dot.upgrade() {
             dot.set_visible(crate::settings::display().update_badge);
         }
+        let body: String = release
+            .body
+            .as_deref()
+            .unwrap_or_default()
+            .chars()
+            .filter(|character| !character.is_control() || matches!(character, '\n' | '\r' | '\t'))
+            .take(6000)
+            .collect();
         if let Some(notes) = self.notes.upgrade() {
-            let body: String = release
-                .body
-                .as_deref()
-                .unwrap_or("Описание обновления появится на странице релиза.")
-                .chars()
-                .filter(|character| {
-                    !character.is_control() || matches!(character, '\n' | '\r' | '\t')
-                })
-                .take(6000)
-                .collect();
             notes.set_markup(&markdown::markup(&body));
         }
         if let Some(scroll) = self.notes_scroll.upgrade() {
-            scroll.set_visible(true);
+            scroll.set_visible(!body.trim().is_empty());
             scroll.vadjustment().set_value(0.0);
         }
         if let Some(action) = self.action.upgrade() {
