@@ -50,6 +50,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--work-dir", type=Path, default=PROJECT / ".build/flatpak")
     parser.add_argument("--output-dir", type=Path, default=PROJECT / "dist")
+    parser.add_argument("--installed-sdk", type=Path, help="Use an existing Flatpak user installation with the required SDK and Rust extension")
     args = parser.parse_args()
     if platform.machine() != "x86_64":
         raise SystemExit("Этот сценарий собирает выпуск x86_64. Запустите его на машине x86_64.")
@@ -61,19 +62,20 @@ def main():
         (work / name).mkdir(exist_ok=True)
     env = os.environ.copy()
     env.update({
-        "FLATPAK_USER_DIR": str(work / "flatpak"),
+        "FLATPAK_USER_DIR": str(args.installed_sdk.resolve() if args.installed_sdk else work / "flatpak"),
         "XDG_CACHE_HOME": str(work / "cache"),
         "TMPDIR": str(work / "tmp"),
     })
-    run(["flatpak", "--user", "remote-add", "--if-not-exists", "flathub",
-         "https://dl.flathub.org/repo/flathub.flatpakrepo"], env=env)
-    run(["flatpak", "--user", "install", "-y", "--noninteractive", "--no-related", "flathub",
-         "org.flatpak.Builder", "org.gnome.Sdk//51", "org.freedesktop.Sdk.Extension.rust-stable//26.08"], env=env)
+    if not args.installed_sdk:
+        run(["flatpak", "--user", "remote-add", "--if-not-exists", "flathub",
+             "https://dl.flathub.org/repo/flathub.flatpakrepo"], env=env)
+        run(["flatpak", "--user", "install", "-y", "--noninteractive", "--no-related", "flathub",
+             "org.flatpak.Builder", "org.gnome.Sdk//51", "org.freedesktop.Sdk.Extension.rust-stable//26.08"], env=env)
 
     stage = Path(tempfile.mkdtemp(prefix="run-", dir=work))
     source = stage / "source"
     source.mkdir()
-    for name in ("src", "packaging", "docs", "Cargo.toml", "Cargo.lock", "build.rs", "README.md"):
+    for name in ("src", "crates", "packaging", "docs", "Cargo.toml", "Cargo.lock", "build.rs", "README.md"):
         path = PROJECT / name
         if path.is_dir():
             shutil.copytree(path, source / name, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
@@ -115,7 +117,7 @@ def main():
             raise SystemExit("Установите системный flatpak-builder и повторите сборку.") from error
     builder = [
         builder_binary,
-        "--user", "--disable-rofiles-fuse", "--install-deps-from=flathub", f"--state-dir={work / 'builder-state'}",
+        "--user", "--disable-rofiles-fuse", *(["--disable-download", "--disable-updates"] if args.installed_sdk else ["--install-deps-from=flathub"]), f"--state-dir={work / 'builder-state'}",
         f"--repo={stage / 'repo'}", str(stage / "build"), str(manifest_path),
     ]
     run(builder, cwd=stage, env=env)

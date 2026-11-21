@@ -1,0 +1,7 @@
+<resources>
+    <style name="Theme.SchoolDay" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/school_day_launch_background</item>
+        <item name="android:windowSplashScreenBackground">@color/school_day_launch_background</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_background_only</item>
+    </style>
+</resources>

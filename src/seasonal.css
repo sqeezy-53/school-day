@@ -21,7 +21,15 @@ window.school-day.holiday {
     --sd-window: mix(@window_bg_color, var(--sd-hue), var(--sd-strength));
     --sd-header: mix(@headerbar_bg_color, var(--sd-hue), var(--sd-strength));
     --sd-field: mix(@view_bg_color, var(--sd-hue), var(--sd-strength));
+    --sd-card: mix(@card_bg_color, var(--sd-hue), var(--sd-strength));
+    --sd-dialog: mix(@dialog_bg_color, var(--sd-hue), var(--sd-strength));
     --sd-popover: mix(@popover_bg_color, var(--sd-hue), var(--sd-popover-strength));
+    --window-bg-color: var(--sd-window);
+    --headerbar-bg-color: var(--sd-header);
+    --view-bg-color: var(--sd-field);
+    --card-bg-color: var(--sd-card);
+    --dialog-bg-color: var(--sd-dialog);
+    --popover-bg-color: var(--sd-popover);
     --sd-control: mix(@window_fg_color, var(--sd-accent), 0.55);
     --sd-border: alpha(var(--sd-control), 0.28);
     --sd-hover: alpha(var(--sd-control), 0.17);
@@ -32,7 +40,7 @@ window.school-day.holiday {
 }
 
 window.school-day-dialog.holiday {
-    background-color: mix(@dialog_bg_color, var(--sd-hue), var(--sd-strength));
+    background-color: var(--sd-dialog);
 }
 
 window.school-day.holiday headerbar,

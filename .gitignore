@@ -7,3 +7,22 @@
 .env
 __pycache__/
 *.pyc
+
+/android/.gradle/
+/android/.kotlin/
+/android/**/build/
+/android/local.properties
+
+# Local signing material and delivery artifacts
+*.apk
+*.aab
+*.jks
+*.keystore
+*.p12
+*.pem
+*.key
+*.gpg
+*.asc
+*.flatpak
+*.exe
+.env.*

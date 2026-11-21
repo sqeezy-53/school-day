@@ -641,7 +641,7 @@ pub fn attach(window: &adw::ApplicationWindow, overlay: &gtk::Overlay, calendar:
     window.add_css_class("school-day");
     let celebration = Rc::new(Celebration::new(overlay));
     let current = Cell::new(None::<usize>);
-    let selected = Cell::new(None::<NaiveDate>);
+    let selected = Cell::new(None);
     let seen = RefCell::new(VecDeque::new());
     let weak_window = window.downgrade();
     let change = celebration.clone();
@@ -650,11 +650,23 @@ pub fn attach(window: &adw::ApplicationWindow, overlay: &gtk::Overlay, calendar:
             return;
         };
         let date = crate::schedule::selected_date(calendar);
-        if selected.replace(Some(date)) == Some(date) {
+        let prefs = crate::settings::display();
+        let state = Some((date, prefs.seasonal, prefs.animations));
+        if selected.replace(state) == state {
             return;
         }
         change.stop();
-        let next = for_date(date);
+        use crate::settings::HolidayStyle;
+        let actual = for_date(date);
+        let next = match prefs.seasonal {
+            HolidayStyle::Off => None,
+            HolidayStyle::Calendar => actual,
+            HolidayStyle::Always => actual.or_else(|| {
+                (1..=366)
+                    .filter_map(|days| date.checked_add_days(chrono::Days::new(days)))
+                    .find_map(|d| for_date(d).filter(|&i| HOLIDAYS[i].art != Motif::Remembrance))
+            }),
+        };
         let previous = current.replace(next);
         if previous != next {
             set_palette(window.upcast_ref(), previous, next);
@@ -670,7 +682,7 @@ pub fn attach(window: &adw::ApplicationWindow, overlay: &gtk::Overlay, calendar:
             }
         }
         let holiday = next.map(|index| HOLIDAYS[index]);
-        let should_greet = announce && holiday.is_some() && {
+        let should_greet = announce && actual.is_some() && holiday.is_some() && {
             let now = Instant::now();
             let mut seen = seen.borrow_mut();
             seen.retain(|&(_, time)| now.duration_since(time) < Duration::from_secs(30));
@@ -686,17 +698,32 @@ pub fn attach(window: &adw::ApplicationWindow, overlay: &gtk::Overlay, calendar:
         };
         let animate = should_greet
             && holiday.is_some_and(|h| h.art != Motif::Remembrance)
+            && prefs.animations
             && animations_enabled(&window);
-        if next != previous || should_greet {
+        if next != previous || should_greet || !prefs.animations {
             change.set_art(holiday, animate);
         }
         if should_greet && let Some(holiday) = holiday {
             change.show(holiday, date, animate);
         }
     };
+    let update = Rc::new(update);
+    let refresh = update.clone();
+    let weak = calendar.downgrade();
+    let handler = crate::settings::watch_appearance(move || {
+        if let Some(calendar) = weak.upgrade() {
+            refresh(&calendar, false);
+        }
+    });
     update(calendar, false);
     calendar.connect_date_notify(move |calendar| update(calendar, true));
-    window.connect_destroy(move |_| celebration.stop());
+    let handler = Cell::new(Some(handler));
+    window.connect_destroy(move |_| {
+        celebration.stop();
+        if let Some(id) = handler.take() {
+            crate::settings::disconnect_appearance(id);
+        }
+    });
 }
 
 #[cfg(test)]

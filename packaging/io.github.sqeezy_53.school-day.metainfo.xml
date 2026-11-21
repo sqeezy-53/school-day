@@ -27,6 +27,12 @@
   </categories>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="1.0.0" date="2026-11-21">
+      <description>
+        <p>New Android app, automatic synchronization over the local network, and improved settings and backups.</p>
+        <p xml:lang="ru">Приложение для Android, автоматическая синхронизация в локальной сети, обновлённые настройки и резервные копии.</p>
+      </description>
+    </release>
     <release version="0.5.1" date="2026-11-11">
       <description>
         <p>Added a graphics renderer setting and fixed transparent backgrounds in Flatpak on GNOME with WhiteSur.</p>

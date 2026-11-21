@@ -8,18 +8,18 @@ use crate::lessons::Lessons;
 use crate::{column, notify, storage, text};
 
 const PROGRESS_FILE: &str = "tutorial.json";
-const CARD_WIDTH: i32 = 360;
-const EDGE: i32 = 14;
-const GAP: i32 = 20;
+const CARD_WIDTH: i32 = 304;
+const EDGE: i32 = 12;
+const GAP: i32 = 12;
 
 #[derive(Clone, Copy)]
 pub(crate) enum Anchor {
     Date,
     AddLesson,
     AddHomework,
-    CompleteHomework,
     Theme,
-    Bells,
+    EditLesson,
+    Day,
 }
 
 impl Anchor {
@@ -28,9 +28,9 @@ impl Anchor {
             Self::Date => "tour-date",
             Self::AddLesson => "tour-add-lesson",
             Self::AddHomework => "tour-add-homework",
-            Self::CompleteHomework => "tour-complete-homework",
             Self::Theme => "tour-theme",
-            Self::Bells => "tour-bells",
+            Self::EditLesson => "tour-edit-lesson",
+            Self::Day => "tour-day",
         }
     }
 
@@ -39,6 +39,9 @@ impl Anchor {
     }
 
     fn find(self, widget: &gtk::Widget) -> Option<gtk::Widget> {
+        if !widget.is_visible() || !widget.is_child_visible() {
+            return None;
+        }
         if widget.has_css_class(self.class()) {
             return Some(widget.clone());
         }
@@ -55,68 +58,49 @@ impl Anchor {
 
 struct Step {
     tab: usize,
-    anchor: Option<Anchor>,
+    anchor: Anchor,
     title: &'static str,
     description: &'static str,
 }
 
-const WELCOME: Step = Step {
-    tab: 0,
-    anchor: None,
-    title: "Короткое знакомство",
-    description: "Добавим пробный урок и ДЗ. Ваши данные останутся без изменений.",
-};
-
 const STEPS: &[Step] = &[
     Step {
         tab: 0,
-        anchor: Some(Anchor::Date),
-        title: "Начните с нужного дня",
-        description: "Выберите день в календаре.",
+        anchor: Anchor::Date,
+        title: "Выбор даты",
+        description: "Нажмите на дату, чтобы открыть календарь.",
     },
     Step {
         tab: 0,
-        anchor: Some(Anchor::AddLesson),
-        title: "Создайте первый урок",
-        description: "Введите предмет и кабинет, затем сохраните урок.",
+        anchor: Anchor::AddLesson,
+        title: "Новый урок",
+        description: "Добавьте урок на выбранный день.",
+    },
+    Step {
+        tab: 0,
+        anchor: Anchor::Day,
+        title: "Настройки дня",
+        description: "Здесь можно включить дистант или сократить уроки.",
+    },
+    Step {
+        tab: 0,
+        anchor: Anchor::EditLesson,
+        title: "Редактор урока",
+        description: "Здесь можно указать замену, отмену или вид работы.",
     },
     Step {
         tab: 1,
-        anchor: Some(Anchor::AddHomework),
-        title: "Запишите домашнее задание",
-        description: "Выберите урок, напишите задание и сохраните.",
-    },
-    Step {
-        tab: 1,
-        anchor: Some(Anchor::CompleteHomework),
-        title: "Отметьте результат",
-        description: "Отметьте галочку у задания.",
+        anchor: Anchor::AddHomework,
+        title: "Домашнее задание",
+        description: "Добавьте задание к уроку или отдельно.",
     },
     Step {
         tab: 2,
-        anchor: Some(Anchor::Theme),
-        title: "Выберите своё оформление",
-        description: "Здесь выбирается светлая, тёмная или автоматическая тема.",
-    },
-    Step {
-        tab: 2,
-        anchor: Some(Anchor::Bells),
-        title: "Проверьте звонки",
-        description: "Здесь настраивается время уроков и перемен.",
-    },
-    Step {
-        tab: 1,
-        anchor: None,
-        title: "Можно начинать",
-        description: "Учебные записи удалятся после выхода.",
+        anchor: Anchor::Theme,
+        title: "Внешний вид",
+        description: "Здесь можно выбрать тему приложения.",
     },
 ];
-
-#[derive(Clone, Copy, PartialEq)]
-enum Screen {
-    Welcome,
-    Step(usize),
-}
 
 struct ReturnPoint {
     tab: usize,
@@ -128,6 +112,7 @@ struct Practice {
     items: Lessons,
     schedule: gtk::Box,
     homework: gtk::Box,
+    calendar: gtk::Calendar,
 }
 
 struct Tour {
@@ -137,7 +122,7 @@ struct Tour {
     pages: glib::WeakRef<gtk::Stack>,
     status: glib::WeakRef<gtk::Label>,
     tabs: [gtk::ToggleButton; 3],
-    screen: Cell<Option<Screen>>,
+    screen: Cell<Option<usize>>,
     return_point: RefCell<Option<ReturnPoint>>,
     practice: RefCell<Option<Practice>>,
     remembered: Cell<bool>,
@@ -147,9 +132,9 @@ struct Tour {
     title: gtk::Label,
     description: gtk::Label,
     instructions_scroll: gtk::ScrolledWindow,
-    progress: gtk::ProgressBar,
     back: gtk::Button,
     next: gtk::Button,
+    collapsed_group: RefCell<Option<glib::WeakRef<adw::ExpanderRow>>>,
 }
 
 pub fn install(
@@ -166,7 +151,7 @@ pub fn install(
     highlight.set_visible(false);
     overlay.add_overlay(&highlight);
 
-    let card = column(8);
+    let card = column(5);
     card.add_css_class("tutorial-card");
     card.set_visible(false);
     let header = gtk::Box::new(gtk::Orientation::Horizontal, 8);
@@ -178,7 +163,7 @@ pub fn install(
     header.append(&title);
     header.append(&kicker);
     let description = text("", "tutorial-description");
-    let instructions = column(8);
+    let instructions = column(3);
     instructions.append(&header);
     instructions.append(&description);
     let instructions_scroll = gtk::ScrolledWindow::new();
@@ -190,16 +175,15 @@ pub fn install(
     instructions_scroll.set_child(Some(&instructions));
     card.append(&instructions_scroll);
 
-    let progress = gtk::ProgressBar::new();
-    card.append(&progress);
-
     let actions = gtk::Box::new(gtk::Orientation::Horizontal, 6);
     actions.add_css_class("tutorial-actions");
     let skip = gtk::Button::with_label("Пропустить");
     skip.add_css_class("flat");
     let spacer = column(0);
     spacer.set_hexpand(true);
-    let back = gtk::Button::with_label("Назад");
+    let back = gtk::Button::from_icon_name("go-previous-symbolic");
+    back.set_tooltip_text(Some("Назад"));
+    back.add_css_class("flat");
     let next = gtk::Button::with_label("Далее");
     next.add_css_class("suggested-action");
     actions.append(&skip);
@@ -227,9 +211,9 @@ pub fn install(
         title,
         description,
         instructions_scroll,
-        progress,
         back,
         next,
+        collapsed_group: RefCell::default(),
     });
 
     let weak = Rc::downgrade(&tour);
@@ -316,6 +300,7 @@ pub fn install(
             gdk::Key::Escape => tour.finish(),
             gdk::Key::Left => tour.previous(),
             gdk::Key::Right => tour.advance(),
+            gdk::Key::F2 => tour.try_target(),
             _ => return glib::Propagation::Proceed,
         }
         glib::Propagation::Stop
@@ -326,17 +311,21 @@ pub fn install(
         let weak = Rc::downgrade(&tour);
         glib::idle_add_local_once(move || {
             if let Some(tour) = weak.upgrade() {
-                tour.open(Screen::Welcome);
+                tour.open(0);
             }
         });
     }
     let action = gio::SimpleAction::new("tutorial", None);
-    action.connect_activate(move |_, _| tour.open(Screen::Welcome));
+    action.connect_activate(move |_, _| {
+        if tour.screen.get().is_none() {
+            tour.open(0);
+        }
+    });
     window.add_action(&action);
 }
 
 impl Tour {
-    fn open(self: &Rc<Self>, screen: Screen) {
+    fn open(self: &Rc<Self>, screen: usize) {
         if self.screen.get().is_some() {
             return;
         }
@@ -363,28 +352,14 @@ impl Tour {
         self.show(screen);
     }
 
-    fn show(self: &Rc<Self>, screen: Screen) {
-        if matches!(screen, Screen::Step(_)) {
-            self.start_practice();
-        }
+    fn show(self: &Rc<Self>, screen: usize) {
+        self.restore_group();
+        self.start_practice();
         self.screen.set(Some(screen));
-        let (step, position, previous, next) = match screen {
-            Screen::Welcome => (&WELCOME, format!("{} шагов", STEPS.len()), false, "Начать"),
-            Screen::Step(index) => {
-                let next = if index + 1 == STEPS.len() {
-                    "Готово"
-                } else {
-                    "Далее"
-                };
-                (
-                    &STEPS[index],
-                    format!("{} / {}", index + 1, STEPS.len()),
-                    true,
-                    next,
-                )
-            }
-        };
+        let step = self.step(screen);
+        let last = screen + 1 == STEPS.len();
         self.tabs[step.tab].set_active(true);
+        self.prepare_exercise(step.anchor);
         if let Some(pages) = self.pages.upgrade()
             && let Some(practice) = self.practice.borrow().as_ref()
         {
@@ -394,66 +369,60 @@ impl Tour {
                 _ => {
                     pages.set_visible_child_name("settings");
                     if let Some(settings) = pages.visible_child() {
-                        let _ = settings.activate_action("settings.main", None);
+                        let _ = settings.activate_action("school-settings.home", None);
                     }
                 }
             }
         }
+        if let Some(group) = self
+            .target()
+            .and_downcast::<adw::ExpanderRow>()
+            .filter(|group| group.is_expanded())
+        {
+            *self.collapsed_group.borrow_mut() = Some(group.downgrade());
+            group.set_expanded(false);
+        }
         if let Some(scroll) = self.scroll.upgrade() {
             scroll.vadjustment().set_value(0.0);
         }
-        self.kicker.set_text(&position);
+        self.kicker
+            .set_text(&format!("{} / {}", screen + 1, STEPS.len()));
         self.title.set_text(step.title);
         self.description.set_text(step.description);
-        let exercise = self.exercise();
         self.instructions_scroll.vadjustment().set_value(0.0);
-        self.back.set_visible(previous);
-        self.next.set_label(if exercise.is_some() {
-            "Попробовать"
-        } else {
-            next
-        });
-        self.progress.set_visible(matches!(screen, Screen::Step(_)));
-        if let Screen::Step(index) = screen {
-            self.progress
-                .set_fraction((index + 1) as f64 / STEPS.len() as f64);
-        }
+        self.back.set_visible(screen > 0);
+        self.next.set_label(if last { "Готово" } else { "Далее" });
         self.refresh_highlight();
-        if step.anchor.is_some() {
-            let weak = Rc::downgrade(self);
-            glib::timeout_add_local_once(Duration::from_millis(150), move || {
-                if let Some(tour) = weak
-                    .upgrade()
-                    .filter(|tour| tour.screen.get() == Some(screen))
-                {
-                    tour.reveal_target();
+        let weak = Rc::downgrade(self);
+        glib::timeout_add_local_once(Duration::from_millis(120), move || {
+            if let Some(tour) = weak
+                .upgrade()
+                .filter(|tour| tour.screen.get() == Some(screen))
+            {
+                tour.reveal_target();
+                if tour.target().is_none() {
+                    tour.description
+                        .set_text("Элемент сейчас скрыт. Продолжите кнопкой «Далее».");
                 }
-            });
-        }
+            }
+        });
         self.next.grab_focus();
     }
 
+    fn step(&self, index: usize) -> &Step {
+        &STEPS[index]
+    }
+
     fn previous(self: &Rc<Self>) {
-        if let Some(Screen::Step(index)) = self.screen.get() {
-            self.show(if index == 0 {
-                Screen::Welcome
-            } else {
-                Screen::Step(index - 1)
-            });
+        if let Some(index) = self.screen.get().filter(|&i| i > 0) {
+            self.show(index - 1);
         }
     }
 
     fn advance(self: &Rc<Self>) {
-        if self.exercise().is_some() {
-            self.try_target();
-            return;
-        }
         match self.screen.get() {
-            Some(Screen::Welcome) => self.show(Screen::Step(0)),
-            Some(Screen::Step(index)) if index + 1 < STEPS.len() => {
-                self.show(Screen::Step(index + 1));
-            }
-            Some(Screen::Step(_)) => self.finish(),
+            Some(index) if index + 1 < STEPS.len() => self.show(index + 1),
+            Some(_) => self.finish(),
             None => {}
         }
     }
@@ -465,28 +434,8 @@ impl Tour {
         let (Some(pages), Some(status)) = (self.pages.upgrade(), self.status.upgrade()) else {
             return;
         };
-        let weak = Rc::downgrade(self);
-        let items = Lessons::practice(move || {
-            let Some(tour) = weak.upgrade() else {
-                return;
-            };
-            let screen = tour.screen.get();
-            let weak = Rc::downgrade(&tour);
-            glib::idle_add_local_once(move || {
-                if let Some(tour) = weak.upgrade()
-                    && tour.screen.get() == screen
-                    && tour.exercise().is_none()
-                    && let Some(Screen::Step(index)) = screen
-                    && matches!(
-                        STEPS[index].anchor,
-                        Some(Anchor::AddLesson | Anchor::AddHomework | Anchor::CompleteHomework)
-                    )
-                {
-                    tour.advance();
-                }
-            });
-        });
-        let (schedule, _) = crate::schedule::schedule_page(&status, items.clone(), None);
+        let items = Lessons::practice(|| {});
+        let (schedule, calendar) = crate::schedule::schedule_page(&status, items.clone(), None);
         let homework = crate::homework::homework_page(&status, items.clone(), None);
         pages.add_child(&schedule);
         pages.add_child(&homework);
@@ -494,58 +443,70 @@ impl Tour {
             items,
             schedule,
             homework,
+            calendar,
         });
     }
 
-    fn exercise(&self) -> Option<Anchor> {
-        let Screen::Step(index) = self.screen.get()? else {
-            return None;
-        };
-        let anchor = STEPS[index].anchor?;
+    fn prepare_exercise(&self, anchor: Anchor) {
         let practice = self.practice.borrow();
-        let items = practice.as_ref()?.items.borrow();
-        match anchor {
-            Anchor::AddLesson if items.is_empty() => Some(anchor),
-            Anchor::AddHomework if items.iter().all(|lesson| lesson.homework.is_empty()) => {
-                Some(anchor)
+        let Some(practice) = practice.as_ref() else {
+            return;
+        };
+        if matches!(anchor, Anchor::Day | Anchor::EditLesson) {
+            let has_lesson = !practice.items.borrow().is_empty();
+            if !has_lesson
+                && let Some(tomorrow) = chrono::Local::now().date_naive().succ_opt()
+                && let Ok(lesson) = crate::lessons::Lesson::new(
+                    "География",
+                    tomorrow,
+                    "10:00".parse().unwrap(),
+                    "10:40".parse().unwrap(),
+                    "12",
+                )
+            {
+                let _ = practice.items.store_lesson(lesson, None);
             }
-            Anchor::CompleteHomework if items.iter().all(|lesson| !lesson.homework_completed) => {
-                Some(anchor)
+            let first = practice.items.borrow().first().map(|item| item.date);
+            if let Some(date) = first {
+                crate::schedule::select_date(&practice.calendar, date);
             }
-            _ => None,
         }
     }
 
     fn try_target(&self) {
-        let Some(Screen::Step(index)) = self.screen.get() else {
+        let Some(index) = self.screen.get() else {
             return;
         };
-        let (Some(anchor), Some(page)) = (
-            STEPS[index].anchor,
-            self.pages.upgrade().and_then(|pages| pages.visible_child()),
-        ) else {
+        let anchor = self.step(index).anchor;
+        let Some(page) = self.pages.upgrade().and_then(|pages| pages.visible_child()) else {
             return;
         };
         let Some(target) = anchor.find(&page) else {
             return;
         };
         match anchor {
-            Anchor::Date => {
+            Anchor::Date | Anchor::Day => {
                 if let Ok(menu) = target.downcast::<gtk::MenuButton>() {
                     menu.popup();
                 }
             }
-            Anchor::AddLesson | Anchor::AddHomework => {
+            Anchor::AddLesson | Anchor::EditLesson | Anchor::AddHomework => {
                 if let Ok(button) = target.downcast::<gtk::Button>() {
                     button.emit_clicked();
                 }
             }
-            Anchor::CompleteHomework => {
-                if let Ok(checkbox) = target.downcast::<gtk::CheckButton>() {
-                    checkbox.set_active(!checkbox.is_active());
-                }
-            }
-            Anchor::Theme | Anchor::Bells => {}
+            Anchor::Theme => {}
+        }
+    }
+
+    fn restore_group(&self) {
+        if let Some(group) = self
+            .collapsed_group
+            .borrow_mut()
+            .take()
+            .and_then(|weak| weak.upgrade())
+        {
+            group.set_expanded(true);
         }
     }
 
@@ -554,6 +515,7 @@ impl Tour {
             return;
         };
         self.screen.set(None);
+        self.restore_group();
         self.card.set_visible(false);
         self.highlight.set_visible(false);
         if let Some(root) = self.overlay.upgrade().and_then(|overlay| overlay.child()) {
@@ -597,21 +559,18 @@ impl Tour {
     }
 
     fn target(&self) -> Option<gtk::Widget> {
-        let Screen::Step(index) = self.screen.get()? else {
-            return None;
-        };
-        let step = &STEPS[index];
-        let anchor = step.anchor?;
-        let target = self
-            .pages
-            .upgrade()
-            .and_then(|pages| pages.visible_child())
-            .and_then(|page| anchor.find(&page));
-        Some(target.unwrap_or_else(|| self.tabs[step.tab].clone().upcast()))
+        let step = self.step(self.screen.get()?);
+        let page = self.pages.upgrade()?.visible_child()?;
+        step.anchor.find(&page)
     }
 
     fn target_bounds(&self, overlay: &gtk::Overlay) -> Option<graphene::Rect> {
-        self.target()?.compute_bounds(overlay)
+        let target = self.target()?;
+        let bounds = target.compute_bounds(overlay)?;
+        let viewport = self.scroll.upgrade()?.compute_bounds(overlay)?;
+        (bounds.y() >= viewport.y()
+            && bounds.y() + bounds.height() <= viewport.y() + viewport.height() + 1.0)
+            .then_some(bounds)
     }
 
     fn refresh_highlight(&self) {

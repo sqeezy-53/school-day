@@ -3,82 +3,11 @@ use chrono::NaiveTime;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
-use crate::bells::BellSchedule;
 use crate::forms::{self, CLASS_LIMIT};
 use crate::tutorial::Anchor;
-use crate::{column, field, notify, primary, text};
+use crate::{column, notify, primary, text};
 
-#[derive(Clone, Copy, Default, PartialEq, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum Theme {
-    Light,
-    Dark,
-    #[default]
-    Auto,
-}
-
-#[derive(Clone, PartialEq, serde::Serialize, serde::Deserialize)]
-#[serde(default)]
-pub struct Settings {
-    pub class: String,
-    pub theme: Theme,
-    pub light_from: NaiveTime,
-    pub dark_from: NaiveTime,
-    pub bells: BellSchedule,
-    pub check_updates: bool,
-    pub hide_old_lessons: bool,
-    pub old_lesson_days: u16,
-}
-
-impl Default for Settings {
-    fn default() -> Self {
-        Self {
-            class: String::new(),
-            theme: Theme::Auto,
-            light_from: NaiveTime::from_hms_opt(7, 0, 0).unwrap(),
-            dark_from: NaiveTime::from_hms_opt(20, 0, 0).unwrap(),
-            bells: BellSchedule::default(),
-            check_updates: false,
-            hide_old_lessons: false,
-            old_lesson_days: 14,
-        }
-    }
-}
-
-impl Settings {
-    pub fn is_dark_at(&self, now: NaiveTime) -> bool {
-        match self.theme {
-            Theme::Light => false,
-            Theme::Dark => true,
-
-            Theme::Auto => {
-                let light = if self.light_from < self.dark_from {
-                    now >= self.light_from && now < self.dark_from
-                } else {
-                    now >= self.light_from || now < self.dark_from
-                };
-
-                !light
-            }
-        }
-    }
-}
-
-fn validate(settings: &Settings) -> Result<(), String> {
-    if !(1..=180).contains(&settings.old_lesson_days) {
-        return Err("Срок скрытия должен быть от 1 до 180 дней".to_string());
-    }
-    if settings.class.contains('\0') {
-        return Err("Недопустимые символы в названии класса".to_string());
-    }
-    if settings.theme == Theme::Auto && settings.light_from == settings.dark_from {
-        return Err("Укажите разное время для светлой и тёмной темы".to_string());
-    }
-
-    settings.bells.slots()?;
-    Ok(())
-}
-
+pub use school_day_core::settings::*;
 pub fn load_settings() -> Result<Settings, String> {
     Ok(
         crate::storage::load_json("settings.json", |settings| validate(settings))?
@@ -92,7 +21,26 @@ fn save_settings(settings: &Settings) -> Result<(), String> {
     crate::storage::save_json("settings.json", settings)
 }
 
-fn apply_settings(settings: &Settings, brand: &gtk::Label) {
+thread_local! { static DISPLAY: Cell<DisplayOptions> = Cell::new(DisplayOptions::default()); }
+pub fn display() -> DisplayOptions {
+    DISPLAY.get()
+}
+thread_local! { static APPEARANCE: gtk::gio::SimpleAction = gtk::gio::SimpleAction::new("appearance",None); }
+pub fn watch_appearance(callback: impl Fn() + 'static) -> gtk::glib::SignalHandlerId {
+    APPEARANCE.with(|action| action.connect_activate(move |_, _| callback()))
+}
+pub fn disconnect_appearance(id: gtk::glib::SignalHandlerId) {
+    APPEARANCE.with(|action| action.disconnect(id));
+}
+pub fn set_display(value: DisplayOptions) {
+    let previous = DISPLAY.replace(value);
+    if previous.seasonal != value.seasonal || previous.animations != value.animations {
+        APPEARANCE.with(|a| a.activate(None));
+    }
+    crate::forms::set_wheel(value.wheel);
+}
+
+pub fn apply_color_scheme(settings: &Settings) {
     let scheme = if settings.is_dark_at(chrono::Local::now().time()) {
         adw::ColorScheme::ForceDark
     } else {
@@ -100,6 +48,10 @@ fn apply_settings(settings: &Settings, brand: &gtk::Label) {
     };
 
     adw::StyleManager::default().set_color_scheme(scheme);
+}
+
+fn apply_settings(settings: &Settings, brand: &gtk::Label) {
+    apply_color_scheme(settings);
 
     let title = if settings.class.is_empty() {
         "Школьный день".to_string()
@@ -131,19 +83,19 @@ fn time_field(title: &str, value: NaiveTime) -> (gtk::Box, gtk::SpinButton, gtk:
     (group, hour, minute)
 }
 
-pub fn settings_page(status: &gtk::Label, brand: &gtk::Label, service: &gtk::Box) -> gtk::Box {
-    let container = column(0);
-    container.append(&settings_form(status, brand, &container, service));
+pub fn settings_page(
+    items: Option<&crate::lessons::Lessons>,
+    status: &gtk::Label,
+    brand: &gtk::Label,
+    service: &gtk::Box,
+    loaded: Result<Settings, String>,
+    sync: Option<&crate::sync_host::Host>,
+) -> gtk::Box {
+    let container = column(14);
+    container.append(&settings_form(
+        status, brand, &container, service, items, loaded, sync,
+    ));
     container
-}
-
-fn old_lesson_days_label(days: u16) -> String {
-    let unit = if days % 10 == 1 && days % 100 != 11 {
-        "дня"
-    } else {
-        "дней"
-    };
-    format!("Скрывать уроки старше {days} {unit}")
 }
 
 fn settings_form(
@@ -151,29 +103,34 @@ fn settings_form(
     brand: &gtk::Label,
     container: &gtk::Box,
     service: &gtk::Box,
+    items: Option<&crate::lessons::Lessons>,
+    loaded: Result<Settings, String>,
+    sync: Option<&crate::sync_host::Host>,
 ) -> gtk::Box {
     while let Some(child) = service.first_child() {
         service.remove(&child);
     }
-    let page = column(32);
+    let page = column(10);
     let heading = gtk::Box::new(gtk::Orientation::Horizontal, 12);
-    let title = text("Настройки", "title");
+    let title = text("Настройки", "page-title");
     title.set_hexpand(true);
     heading.append(&title);
-    let tutorial = gtk::Button::from_icon_name("help-browser-symbolic");
-    tutorial.add_css_class("flat");
-    tutorial.add_css_class("circular");
-    tutorial.set_valign(gtk::Align::Center);
-    tutorial.set_tooltip_text(Some("Пройти обучение снова"));
-    tutorial.set_action_name(Some("win.tutorial"));
-    heading.append(&tutorial);
+    let help = gtk::MenuButton::builder()
+        .icon_name("help-browser-symbolic")
+        .tooltip_text("Помощь")
+        .build();
+    help.add_css_class("flat");
+    let guide = gtk::gio::Menu::new();
+    guide.append(Some("Пройти обучение"), Some("win.tutorial"));
+    help.set_menu_model(Some(&guide));
+    heading.append(&help);
     page.append(&heading);
 
-    let loaded = match load_settings() {
+    let loaded = match loaded {
         Ok(settings) => settings,
 
         Err(error) => {
-            service.append(&crate::updates::indicator(false, |_| {
+            service.append(&crate::updates::indicator(false, true, |_, _| {
                 Err("Сначала восстановите настройки приложения".into())
             }));
             page.append(&text(
@@ -183,6 +140,8 @@ fn settings_form(
             let reset = primary("Восстановить настройки по умолчанию");
             let (status, brand, container) = (status.clone(), brand.clone(), container.downgrade());
             let weak_service = service.downgrade();
+            let items = items.cloned();
+            let sync = sync.cloned();
             reset.connect_clicked(move |_| {
                 let Some(container) = container.upgrade() else {
                     return;
@@ -193,7 +152,15 @@ fn settings_form(
                             container.remove(&child);
                         }
                         if let Some(service) = weak_service.upgrade() {
-                            container.append(&settings_form(&status, &brand, &container, &service));
+                            container.append(&settings_form(
+                                &status,
+                                &brand,
+                                &container,
+                                &service,
+                                items.as_ref(),
+                                load_settings(),
+                                sync.as_ref(),
+                            ));
                         }
                         let message = backup.map_or_else(
                             || "Настройки восстановлены".to_string(),
@@ -217,66 +184,22 @@ fn settings_form(
 
     apply_settings(&loaded, brand);
 
-    let sections = gtk::Stack::new();
-    sections.set_vhomogeneous(false);
-    sections.add_named(&page, Some("main"));
-    let advanced = column(28);
-    let back_row = gtk::Box::new(gtk::Orientation::Horizontal, 12);
-    let back = gtk::Button::from_icon_name("go-previous-symbolic");
-    back.set_tooltip_text(Some("Назад к настройкам"));
-    back.add_css_class("flat");
-    back_row.append(&back);
-    back_row.append(&text("Дополнительные настройки", "settings-title"));
-    advanced.append(&back_row);
-    sections.add_named(&advanced, Some("advanced"));
-    let actions = gtk::gio::SimpleActionGroup::new();
-    let show_main = gtk::gio::SimpleAction::new("main", None);
-    let weak_sections = sections.downgrade();
-    show_main.connect_activate(move |_, _| {
-        if let Some(sections) = weak_sections.upgrade() {
-            sections.set_visible_child_name("main");
-        }
-    });
-    actions.add_action(&show_main);
-    container.insert_action_group("settings", Some(&actions));
-    let more = gtk::Button::new();
-    more.add_css_class("settings-link");
-    let more_row = gtk::Box::new(gtk::Orientation::Horizontal, 12);
-    let more_label = text("Дополнительные настройки", "section");
-    more_label.set_hexpand(true);
-    more_row.append(&more_label);
-    more_row.append(&gtk::Image::from_icon_name("go-next-symbolic"));
-    more.set_child(Some(&more_row));
-    let weak_sections = sections.downgrade();
-    let weak_back = back.downgrade();
-    more.connect_clicked(move |_| {
-        if let Some(sections) = weak_sections.upgrade() {
-            sections.set_visible_child_name("advanced");
-        }
-        if let Some(back) = weak_back.upgrade() {
-            back.grab_focus();
-        }
-    });
-    let weak_container = container.downgrade();
-    let weak_more = more.downgrade();
-    back.connect_clicked(move |_| {
-        if let Some(container) = weak_container.upgrade() {
-            let _ = container.activate_action("settings.main", None);
-        }
-        if let Some(more) = weak_more.upgrade() {
-            more.grab_focus();
-        }
-    });
-
-    let class = field(&advanced, "Класс", "Например, 7А");
+    let stack = gtk::Stack::new();
+    stack.set_hhomogeneous(false);
+    stack.set_vhomogeneous(false);
+    stack.add_named(&page, Some("home"));
+    let general = adw::PreferencesGroup::builder().title("Общие").build();
+    page.append(&general);
+    let class = adw::EntryRow::builder().title("Класс").build();
     class.set_text(&loaded.class);
-    let class_error = forms::error_label(&advanced, &class);
-
-    let appearance = column(12);
-    appearance.append(&text("Тема", "section"));
+    general.add(&class);
+    let class_error = text("", "form-error");
+    class_error.set_visible(false);
+    page.append(&class_error);
 
     let theme = gtk::DropDown::from_strings(&["Светлая", "Тёмная", "Авто"]);
-    Anchor::Theme.mark(&theme);
+    theme.set_widget_name("settings-theme");
+    crate::forms::guard_wheel(&theme);
 
     theme.set_selected(match loaded.theme {
         Theme::Light => 0,
@@ -284,7 +207,11 @@ fn settings_form(
         Theme::Auto => 2,
     });
 
-    appearance.append(&theme);
+    theme.set_valign(gtk::Align::Center);
+    let theme_row = adw::ActionRow::builder().title("Тема").build();
+    theme_row.add_suffix(&theme);
+    general.add(&theme_row);
+    Anchor::Theme.mark(&theme);
 
     let automatic = adw::WrapBox::new();
     automatic.set_child_spacing(24);
@@ -298,35 +225,25 @@ fn settings_form(
     automatic.append(&dark_group);
     automatic.set_visible(loaded.theme == Theme::Auto);
 
-    appearance.append(&automatic);
-    page.append(&appearance);
-
-    let old_lessons = column(18);
-    old_lessons.add_css_class("settings-section");
-    old_lessons.append(&text("Старые уроки", "settings-title"));
-    let hide_row = gtk::Box::new(gtk::Orientation::Horizontal, 12);
-    let hide_label = text("Автоматически скрывать старые уроки", "section");
-    hide_label.set_hexpand(true);
-    let hide_old = gtk::Switch::new();
-    hide_old.set_valign(gtk::Align::Center);
-    hide_old.set_active(loaded.hide_old_lessons);
-    hide_label.set_mnemonic_widget(Some(&hide_old));
-    hide_row.append(&hide_label);
-    hide_row.append(&hide_old);
-    old_lessons.append(&hide_row);
-    let days_label = text(&old_lesson_days_label(loaded.old_lesson_days), "section");
-    let days = gtk::Scale::with_range(gtk::Orientation::Horizontal, 1.0, 180.0, 1.0);
-    days.set_digits(0);
-    days.set_round_digits(0);
-    days.set_draw_value(false);
+    let hide_old = adw::SwitchRow::builder()
+        .title("Автоматически скрывать старые уроки")
+        .active(loaded.hide_old_lessons)
+        .build();
+    let days = gtk::SpinButton::with_range(1.0, 180.0, 1.0);
+    days.set_numeric(true);
+    days.set_valign(gtk::Align::Center);
     days.set_value(f64::from(loaded.old_lesson_days));
-    days.set_sensitive(loaded.hide_old_lessons);
-    days.set_tooltip_text(Some("Срок скрытия старых уроков в днях"));
-    days_label.set_mnemonic_widget(Some(&days));
-    old_lessons.append(&days_label);
-    old_lessons.append(&days);
-    advanced.append(&old_lessons);
+    days.set_tooltip_text(Some("Срок скрытия в днях"));
+    days.update_property(&[gtk::accessible::Property::Label("Скрывать спустя, дней")]);
+    crate::forms::guard_wheel(&days);
+    let days_row = adw::ActionRow::builder()
+        .title("Скрывать спустя, дней")
+        .visible(loaded.hide_old_lessons)
+        .build();
+    days_row.add_suffix(&days);
+    days_row.set_activatable_widget(Some(&days));
 
+    set_display(loaded.display);
     let current = Rc::new(RefCell::new(loaded));
     let saved = Rc::clone(&current);
 
@@ -347,9 +264,11 @@ fn settings_form(
     let weak_status = status.downgrade();
     let weak_brand = brand.downgrade();
 
-    let updating = Cell::new(false);
+    let updating = Rc::new(Cell::new(false));
+    let updating_controls = updating.clone();
 
     let commit: Rc<dyn Fn()> = Rc::new(move || {
+        let updating = &updating_controls;
         if updating.get() {
             return;
         }
@@ -407,6 +326,7 @@ fn settings_form(
             }
         }
         let candidate = Settings {
+            display: saved.borrow().display,
             class: class_value,
 
             theme: match theme.selected() {
@@ -451,13 +371,38 @@ fn settings_form(
             }
 
             Err(error) => {
+                use chrono::Timelike;
+                let old = saved.borrow();
+                updating.set(true);
+                class.set_text(&old.class);
+                theme.set_selected(match old.theme {
+                    Theme::Light => 0,
+                    Theme::Dark => 1,
+                    Theme::Auto => 2,
+                });
+                automatic.set_visible(old.theme == Theme::Auto);
+                hide_old.set_active(old.hide_old_lessons);
+                days.set_value(f64::from(old.old_lesson_days));
+                for (spin, previous) in times.iter().zip([
+                    old.light_from.hour(),
+                    old.light_from.minute(),
+                    old.dark_from.hour(),
+                    old.dark_from.minute(),
+                ]) {
+                    spin.set_value(f64::from(previous));
+                }
+                updating.set(false);
                 notify(&status, &format!("Не удалось сохранить настройки: {error}"));
             }
         }
     });
 
     let callback = Rc::clone(&commit);
-    class.connect_changed(move |_| callback());
+    class.connect_entry_activated(move |_| callback());
+    let callback = Rc::clone(&commit);
+    let focus = gtk::EventControllerFocus::new();
+    focus.connect_leave(move |_| callback());
+    class.add_controller(focus);
 
     let callback = Rc::clone(&commit);
     theme.connect_selected_notify(move |_| callback());
@@ -468,10 +413,10 @@ fn settings_form(
     }
 
     let callback = Rc::clone(&commit);
-    let weak_days = days.downgrade();
+    let weak_days_row = days_row.downgrade();
     hide_old.connect_active_notify(move |switch| {
-        if let Some(days) = weak_days.upgrade() {
-            days.set_sensitive(switch.is_active());
+        if let Some(row) = weak_days_row.upgrade() {
+            row.set_visible(switch.is_active());
         }
         callback();
     });
@@ -479,10 +424,9 @@ fn settings_form(
     let pending = Rc::new(RefCell::new(None::<gtk::glib::SourceId>));
     let pending_save = Rc::clone(&pending);
     let callback = Rc::clone(&commit);
-    let weak_days_label = days_label.downgrade();
-    days.connect_value_changed(move |days| {
-        if let Some(label) = weak_days_label.upgrade() {
-            label.set_text(&old_lesson_days_label(days.value().round() as u16));
+    let queue = Rc::new(move || {
+        if updating.get() {
+            return;
         }
         if let Some(source) = pending_save.borrow_mut().take() {
             source.remove();
@@ -496,45 +440,217 @@ fn settings_form(
             });
         *pending_save.borrow_mut() = Some(source);
     });
-    for section in [&page, &advanced] {
-        let pending = Rc::clone(&pending);
-        let commit = Rc::clone(&commit);
-        section.connect_unmap(move |_| {
-            if let Some(source) = pending.borrow_mut().take() {
-                source.remove();
-                commit();
-            }
-        });
-    }
-
-    let initial_bells = current.borrow().bells.clone();
-    let school_settings = Rc::clone(&current);
-    let weak_status = status.downgrade();
-    page.append(&crate::bells::editor(&initial_bells, move |bells| {
-        let mut candidate = school_settings.borrow().clone();
-        candidate.bells = bells;
-        save_settings(&candidate)?;
-        *school_settings.borrow_mut() = candidate;
-        if let Some(status) = weak_status.upgrade() {
-            notify(&status, "Звонки сохранены");
+    let class_save = queue.clone();
+    class.connect_changed(move |_| class_save());
+    days.connect_value_changed(move |_| queue());
+    let flush = move || {
+        let source = pending.borrow_mut().take();
+        if let Some(source) = source {
+            source.remove();
+            commit();
         }
-        Ok(())
-    }));
+    };
+    let flush_on_leave = flush.clone();
+    stack.connect_unmap(move |_| flush_on_leave());
+    stack.connect_visible_child_notify(move |_| flush());
+    let bells_page = subpage(&stack, "bells", "Расписание звонков", "home");
+    let bell_editor = column(0);
+    bells_page.append(&bell_editor);
+    let school_settings = current.clone();
+    let model = items.cloned();
+    let feedback = status.downgrade();
+    bell_editor.connect_map(move |editor| {
+        if editor.first_child().is_some() {
+            return;
+        }
+        let initial = model
+            .as_ref()
+            .and_then(|m| m.data().bells.clone())
+            .unwrap_or_else(|| school_settings.borrow().bells.clone());
+        let (model, saved, status) = (model.clone(), school_settings.clone(), feedback.clone());
+        editor.append(&crate::bells::editor(&initial, move |bells| {
+            if let Some(model) = &model {
+                model.set_bells(bells)?;
+            } else {
+                let mut settings = saved.borrow().clone();
+                settings.bells = bells;
+                save_settings(&settings)?;
+                *saved.borrow_mut() = settings;
+            }
+            if let Some(status) = status.upgrade() {
+                notify(&status, "Звонки сохранены");
+            }
+            Ok(())
+        }));
+    });
+    bell_editor.connect_unmap(|editor| {
+        if let Some(child) = editor.first_child() {
+            let weak = editor.downgrade();
+            gtk::glib::idle_add_local_once(move || {
+                if let Some(editor) = weak.upgrade().filter(|editor| !editor.is_mapped())
+                    && child.parent().as_ref() == Some(editor.upcast_ref())
+                {
+                    editor.remove(&child);
+                }
+            });
+        }
+    });
 
-    page.append(&more);
+    let links = adw::PreferencesGroup::builder().title("Приложение").build();
+    page.append(&links);
+    link(&links, &stack, "bells", "Расписание звонков", "");
+    link(&links, &stack, "advanced", "Дополнительные настройки", "");
+    let advanced = subpage(&stack, "advanced", "Дополнительные настройки", "home");
+    let advanced_links = adw::PreferencesGroup::new();
+    advanced.append(&advanced_links);
+    let actions = gtk::gio::SimpleActionGroup::new();
+    let home = gtk::gio::SimpleAction::new("home", None);
+    let weak_stack = stack.downgrade();
+    home.connect_activate(move |_, _| {
+        if let Some(stack) = weak_stack.upgrade() {
+            stack.set_visible_child_name("home");
+        }
+    });
+    actions.add_action(&home);
+    container.insert_action_group("school-settings", Some(&actions));
+    stack.connect_visible_child_notify(|stack| {
+        if let Some(scroll) = stack
+            .ancestor(gtk::ScrolledWindow::static_type())
+            .and_downcast::<gtk::ScrolledWindow>()
+        {
+            scroll.vadjustment().set_value(0.0);
+        }
+    });
 
-    let automatic_updates = current.borrow().check_updates;
     let update_settings = Rc::clone(&current);
+    let (automatic_updates, badge) = {
+        let settings = current.borrow();
+        (settings.check_updates, settings.display.update_badge)
+    };
     service.append(&crate::updates::indicator(
         automatic_updates,
-        move |enabled| {
+        badge,
+        move |preference, enabled| {
             let mut candidate = update_settings.borrow().clone();
-            candidate.check_updates = enabled;
+            match preference {
+                crate::updates::Preference::Automatic => candidate.check_updates = enabled,
+                crate::updates::Preference::Badge => candidate.display.update_badge = enabled,
+            }
             save_settings(&candidate)?;
+            set_display(candidate.display);
             *update_settings.borrow_mut() = candidate;
             Ok(())
         },
     ));
+
+    for (key, title, choices) in preference_groups() {
+        let main = matches!(key, "data" | "sync");
+        let page = subpage(&stack, key, title, if main { "home" } else { "advanced" });
+        let group = adw::PreferencesGroup::new();
+        page.append(&group);
+        link(
+            if main { &links } else { &advanced_links },
+            &stack,
+            key,
+            title,
+            "",
+        );
+        match key {
+            "appearance" => group.add(&automatic),
+            "schedule" => {
+                group.add(&hide_old);
+                group.add(&days_row);
+            }
+            "data" => {
+                if let Some(items) = items {
+                    crate::transfer::populate(&group, items, status);
+                }
+            }
+            "sync" => {
+                if let (Some(items), Some(sync)) = (items, sync) {
+                    crate::sync_ui::populate(&group, items, status, sync);
+                }
+            }
+            "about" => {
+                crate::transfer::about(&group);
+                page.append(&crate::transfer::system_requirements());
+            }
+            _ => {}
+        }
+        for (title, field) in choices {
+            let row = adw::SwitchRow::builder().title(title).build();
+            row.set_active(*field(&mut current.borrow().display.clone()));
+            let state = current.clone();
+            let status = status.downgrade();
+            row.connect_active_notify(move |row| {
+                let mut next = state.borrow().clone();
+                let old = *field(&mut next.display);
+                if old == row.is_active() {
+                    return;
+                }
+                *field(&mut next.display) = row.is_active();
+                match save_settings(&next) {
+                    Ok(()) => {
+                        set_display(next.display);
+                        *state.borrow_mut() = next;
+                    }
+                    Err(error) => {
+                        row.set_active(old);
+                        if let Some(status) = status.upgrade() {
+                            notify(&status, &error);
+                        }
+                    }
+                }
+            });
+            group.add(&row);
+        }
+        if key == "appearance" {
+            let mode = gtk::DropDown::from_strings(&["По календарю", "Всегда", "Выключено"]);
+            crate::forms::guard_wheel(&mode);
+            let index = |mode| match mode {
+                HolidayStyle::Calendar => 0,
+                HolidayStyle::Always => 1,
+                HolidayStyle::Off => 2,
+            };
+            mode.set_selected(index(current.borrow().display.seasonal));
+            mode.set_widget_name("holiday-mode");
+            mode.set_tooltip_text(Some(
+                "В режиме «Всегда» между праздниками используется оформление ближайшего праздника.",
+            ));
+            let holiday = column(5);
+            crate::margins(&holiday, 8);
+            let label = text("Праздничное оформление", "section");
+            label.set_mnemonic_widget(Some(&mode));
+            holiday.append(&label);
+            holiday.append(&mode);
+            group.add(&holiday);
+            let (state, feedback) = (current.clone(), status.downgrade());
+            mode.connect_selected_notify(move |mode| {
+                let mut next = state.borrow().clone();
+                let old = next.display.seasonal;
+                next.display.seasonal = match mode.selected() {
+                    0 => HolidayStyle::Calendar,
+                    1 => HolidayStyle::Always,
+                    _ => HolidayStyle::Off,
+                };
+                if next.display.seasonal == old {
+                    return;
+                }
+                match save_settings(&next) {
+                    Ok(()) => {
+                        set_display(next.display);
+                        *state.borrow_mut() = next;
+                    }
+                    Err(e) => {
+                        mode.set_selected(index(old));
+                        if let Some(label) = feedback.upgrade() {
+                            notify(&label, &e);
+                        }
+                    }
+                }
+            });
+        }
+    }
 
     let weak_brand = brand.downgrade();
 
@@ -547,14 +663,110 @@ fn settings_form(
             return gtk::glib::ControlFlow::Break;
         };
 
-        apply_settings(&current.borrow(), &brand);
+        if current.borrow().theme == Theme::Auto {
+            apply_settings(&current.borrow(), &brand);
+        }
 
         gtk::glib::ControlFlow::Continue
     });
 
-    let root = column(0);
-    root.append(&sections);
-    root
+    let layout = column(0);
+    layout.append(&stack);
+    layout
+}
+
+fn subpage(stack: &gtk::Stack, key: &str, title: &str, parent: &'static str) -> gtk::Box {
+    let page = column(14);
+    let header = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+    let back = gtk::Button::from_icon_name("go-previous-symbolic");
+    back.set_tooltip_text(Some("Назад к настройкам"));
+    back.add_css_class("flat");
+    header.append(&back);
+    header.append(&text(title, "page-title"));
+    page.append(&header);
+    let weak = stack.downgrade();
+    back.connect_clicked(move |_| {
+        if let Some(stack) = weak.upgrade() {
+            stack.set_visible_child_name(parent);
+        }
+    });
+    stack.add_named(&page, Some(key));
+    page
+}
+
+fn link(
+    group: &adw::PreferencesGroup,
+    stack: &gtk::Stack,
+    key: &'static str,
+    title: &str,
+    subtitle: &str,
+) -> adw::ActionRow {
+    let row = adw::ActionRow::builder()
+        .title(title)
+        .subtitle(subtitle)
+        .activatable(true)
+        .build();
+    row.add_suffix(&gtk::Image::from_icon_name("go-next-symbolic"));
+    let weak = stack.downgrade();
+    row.connect_activated(move |_| {
+        if let Some(stack) = weak.upgrade() {
+            stack.set_visible_child_name(key);
+        }
+    });
+    group.add(&row);
+    row
+}
+
+type Choice = (&'static str, fn(&mut DisplayOptions) -> &mut bool);
+fn preference_groups() -> Vec<(&'static str, &'static str, Vec<Choice>)> {
+    vec![
+        (
+            "appearance",
+            "Оформление и анимации",
+            vec![
+                ("Компактный режим", |s| &mut s.compact),
+                ("Анимации праздников", |s| {
+                    &mut s.animations
+                }),
+            ],
+        ),
+        (
+            "schedule",
+            "Отображение расписания",
+            vec![
+                ("Напоминать за 5 минут до урока", |s| &mut s.reminders),
+                ("Кабинеты", |s| &mut s.rooms),
+                ("Заметки", |s| &mut s.notes),
+                ("Время уроков", |s| &mut s.times),
+                ("Прошедшие уроки", |s| &mut s.finished),
+                ("Краткие отметки уроков", |s| {
+                    &mut s.compact_status
+                }),
+            ],
+        ),
+        (
+            "control",
+            "Управление",
+            vec![
+                ("Менять значения колёсиком", |s| {
+                    &mut s.wheel
+                }),
+                ("Подтверждать удаление", |s| {
+                    &mut s.confirm_delete
+                }),
+            ],
+        ),
+        (
+            "data",
+            "Данные",
+            vec![(
+                "Ежедневная копия перед изменением расписания",
+                |s| &mut s.auto_backup,
+            )],
+        ),
+        ("sync", "Синхронизация", vec![]),
+        ("about", "О приложении", vec![]),
+    ]
 }
 
 #[cfg(test)]

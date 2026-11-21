@@ -1,4 +1,4 @@
-name: Сборка Windows и Flatpak
+name: Сборка Windows
 
 on:
   workflow_dispatch:
@@ -12,6 +12,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-24.04
+    timeout-minutes: 35
     container: debian:trixie
     steps:
       - name: Установить компоненты
@@ -24,16 +25,20 @@ jobs:
           rustup target add x86_64-pc-windows-gnu
 
       - name: Получить исходники
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Проверка репозитория
         run: |
           git config --system --add safe.directory "$GITHUB_WORKSPACE"
           git rev-parse --show-toplevel
-          git rev-parse --short HEAD
-
-      - name: Показать файлы
-        run: ls -la
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            version=$(python3 -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["package"]["version"])')
+            test "$GITHUB_REF_NAME" = "v$version"
+          fi
+          git rev-parse HEAD
 
       - name: Проверить все ли установлено
         run: |
@@ -58,74 +63,13 @@ jobs:
           --nsis-dir /usr/share/nsis \
           --cross-prefix x86_64-w64-mingw32ucrt-
           
+      - name: Проверить файлы сборки
+        run: |
+          cd artifacts
+          sha256sum --check SHA256SUMS-windows
       - name: Сохранить файлы сборки
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: school-day-windows
           path: artifacts/
           if-no-files-found: error
-        
-  
-  flatpak:
-    runs-on: ubuntu-24.04
-    permissions:
-      contents: read
-
-    steps:
-      - name: Получаем исходники
-        uses: actions/checkout@v7
-
-      - name: Установка необходимого
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y flatpak flatpak-builder
-          rustup update stable
-
-      - name: Собрать Flatpak
-        run: |
-          python3 packaging/build-flatpak.py \
-            --work-dir "$RUNNER_TEMP/school-day-flatpak" \
-            --output-dir "$GITHUB_WORKSPACE/flatpak-artifacts"
-
-      - name: Сохранить Flatpak
-        uses: actions/upload-artifact@v7
-        with:
-          name: school-day-flatpak
-          path: flatpak-artifacts/
-          if-no-files-found: error
-
-  
-  release:
-    name: Подготовить релиз
-    needs: [build, flatpak]
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
-    runs-on: ubuntu-24.04
-
-    permissions:
-      contents: write
-
-    steps:
-      - name: Скачать Windows-сборку
-        uses: actions/download-artifact@v8
-        with:
-          name: school-day-windows
-          path: release-files
-
-      - name: Скачать Flatpak
-        uses: actions/download-artifact@v8
-        with:
-          name: school-day-flatpak
-          path: release-files
-
-      - name: Создать черновик
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-        run: |
-          gh release create "$GITHUB_REF_NAME" release-files/* \
-            --verify-tag \
-            --draft \
-            --title "Школьный день ${GITHUB_REF_NAME#v}" \
-            --generate-notes
-
-  

@@ -18,12 +18,22 @@ struct ScheduleRows {
     content: gtk::Box,
     rows: RefCell<Vec<LessonRow>>,
     revision: Cell<u64>,
+    display: Cell<crate::settings::DisplayOptions>,
     focus_on_date_change: Cell<Option<NaiveTime>>,
+    cutoff: Cell<Option<gtk::glib::SourceId>>,
 }
 
 struct LessonRow {
     time: gtk::Label,
     room: Option<gtk::Label>,
+}
+
+impl Drop for ScheduleRows {
+    fn drop(&mut self) {
+        if let Some(timeout) = self.cutoff.take() {
+            timeout.remove();
+        }
+    }
 }
 
 impl ScheduleRows {
@@ -35,7 +45,7 @@ impl ScheduleRows {
             if previous.remote != options.remote
                 && let Some(room) = &row.room
             {
-                room.set_visible(!options.remote);
+                room.set_visible(!options.remote && crate::settings::display().rooms);
             }
         }
     }
@@ -54,7 +64,9 @@ pub fn schedule_page(
         content: column(0),
         rows: RefCell::new(Vec::new()),
         revision: Cell::new(lessons.revision()),
+        display: Cell::new(crate::settings::display()),
         focus_on_date_change: Cell::new(None),
+        cutoff: Cell::new(None),
     });
     render_lessons(&list, &lessons, &calendar, status, None, undo);
 
@@ -152,6 +164,49 @@ pub fn schedule_page(
         });
     }
 
+    let (edit_list, edit_cal, edit_status, edit_items, edit_undo) = (
+        Rc::downgrade(&list),
+        calendar.downgrade(),
+        status.downgrade(),
+        lessons.clone(),
+        undo.cloned(),
+    );
+    let (ref_list, ref_cal) = (Rc::downgrade(&list), calendar.downgrade());
+    crate::search::actions(
+        &page,
+        move |id| {
+            if let (Ok(id), Some(list), Some(calendar), Some(status)) = (
+                id.parse(),
+                edit_list.upgrade(),
+                edit_cal.upgrade(),
+                edit_status.upgrade(),
+            ) {
+                let date = edit_items
+                    .borrow()
+                    .iter()
+                    .find(|l| l.id == id)
+                    .map(|l| l.date);
+                if let Some(date) = date {
+                    select_date(&calendar, date);
+                    on_add_lesson(
+                        &status,
+                        &edit_items,
+                        &list,
+                        &calendar,
+                        Some(id),
+                        edit_undo.as_ref(),
+                    );
+                }
+            }
+        },
+        move || {
+            if let (Some(list), Some(calendar)) = (ref_list.upgrade(), ref_cal.upgrade())
+                && list.content.is_mapped()
+            {
+                calendar.notify("date");
+            }
+        },
+    );
     let weak_list = Rc::downgrade(&list);
     let status = status.clone();
     let items_for_map = lessons.clone();
@@ -159,7 +214,10 @@ pub fn schedule_page(
     let status_for_map = status.clone();
     let undo_for_map = undo.cloned();
     page.connect_map(move |_| {
-        if list.revision.get() != items_for_map.revision() {
+        if list.revision.get() != items_for_map.revision()
+            || list.display.get() != crate::settings::display()
+            || !crate::settings::display().finished
+        {
             render_lessons(
                 &list,
                 &items_for_map,
@@ -190,6 +248,7 @@ fn show_day_options(button: &gtk::MenuButton, remote: &gtk::Image, options: DayO
     } else {
         &["day-options", "day-configured"]
     });
+    Anchor::Day.mark(button);
     let mut description = Vec::new();
     if options.remote {
         description.push("Весь день дистанционно".to_string());
@@ -234,6 +293,7 @@ fn day_options_button(
 ) -> gtk::Box {
     let button = gtk::MenuButton::new();
     button.set_label("День");
+
     let indicator = remote_day_icon();
     let day_controls = gtk::Box::new(gtk::Orientation::Horizontal, 6);
     day_controls.append(&indicator);
@@ -254,6 +314,7 @@ fn day_options_button(
     form.append(&shortened);
     let minutes_row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
     let minutes = gtk::SpinButton::with_range(1.0, f64::from(MAX_SHORT_MINUTES), 1.0);
+    crate::forms::guard_wheel(&minutes);
     minutes.set_numeric(true);
     let minutes_label = text("Минут на урок", "section");
     minutes_label.set_mnemonic_widget(Some(&minutes));
@@ -270,6 +331,17 @@ fn day_options_button(
 
     let weak_button = button.downgrade();
     let weak_indicator = indicator.downgrade();
+    let (map_indicator, map_items, map_cal) = (
+        weak_indicator.clone(),
+        lessons.clone(),
+        calendar.downgrade(),
+    );
+    button.connect_map(move |b| {
+        if let (Some(i), Some(c)) = (map_indicator.upgrade(), map_cal.upgrade()) {
+            show_day_options(b, &i, map_items.day_options(selected_date(&c)));
+        }
+    });
+
     let items = lessons.clone();
     calendar.connect_date_notify(move |date| {
         if let (Some(button), Some(indicator)) = (weak_button.upgrade(), weak_indicator.upgrade()) {
@@ -322,7 +394,9 @@ fn day_options_button(
                         show_day_options(&button, &indicator, options);
                     }
                     if let Some(list) = weak_list.upgrade() {
-                        if list.revision.get() == previous_revision {
+                        if list.revision.get() == previous_revision
+                            && crate::settings::display().finished
+                        {
                             list.update_day(&items.on_date(day), previous, options);
                             list.revision.set(items.revision());
                         } else {
@@ -550,10 +624,26 @@ fn lesson_heading(lesson: &Lesson) -> gtk::Widget {
     heading.set_line_spacing(3);
     heading.append(&title);
     if lesson.options.cancelled {
-        heading.append(&lesson_badge("Отменён", "Урок отменён", "cancelled"));
+        heading.append(&lesson_badge(
+            if crate::settings::display().compact_status {
+                "×"
+            } else {
+                "Отменён"
+            },
+            "Урок отменён",
+            "cancelled",
+        ));
     }
     if replacement {
-        heading.append(&lesson_badge("Замена", "Предмет заменён", "replacement"));
+        heading.append(&lesson_badge(
+            if crate::settings::display().compact_status {
+                "↔"
+            } else {
+                "Замена"
+            },
+            "Предмет заменён",
+            "replacement",
+        ));
     }
     let work = match lesson.options.work {
         LessonWork::Regular => None,
@@ -574,12 +664,18 @@ fn render_lessons(
     focus_time: Option<NaiveTime>,
     undo: Option<&UndoHandle>,
 ) {
+    if let Some(timeout) = list.cutoff.take() {
+        timeout.remove();
+    }
     while let Some(child) = list.content.first_child() {
         list.content.remove(&child);
     }
     let date = selected_date(calendar);
     let options = lessons.day_options(date);
     let day = lessons.on_date(date);
+    let prefs = crate::settings::display();
+    list.display.set(prefs);
+    let now = chrono::Local::now().naive_local();
     list.revision.set(lessons.revision());
     if day.is_empty() {
         list.rows.borrow_mut().clear();
@@ -587,33 +683,85 @@ fn render_lessons(
             .append(&empty_state("x-office-calendar-symbolic", "Нет уроков"));
         return;
     }
+    if !prefs.finished {
+        let next = day
+            .iter()
+            .map(|lesson| lesson.date.and_time(options.end_time(lesson)))
+            .filter(|&end| end > now)
+            .min();
+        if let Some(end) = next {
+            if date == now.date() {
+                let (weak, cal, status) = (
+                    Rc::downgrade(list),
+                    calendar.downgrade(),
+                    status.downgrade(),
+                );
+                let (data, undo) = (lessons.clone(), undo.cloned());
+                let delay =
+                    (end - now).to_std().unwrap_or_default() + std::time::Duration::from_millis(10);
+                list.cutoff
+                    .set(Some(gtk::glib::timeout_add_local_once(delay, move || {
+                        if let Some(list) = weak.upgrade() {
+                            list.cutoff.take();
+                            if let (Some(calendar), Some(status)) =
+                                (cal.upgrade(), status.upgrade())
+                                && list.content.is_mapped()
+                            {
+                                render_lessons(
+                                    &list,
+                                    &data,
+                                    &calendar,
+                                    &status,
+                                    None,
+                                    undo.as_ref(),
+                                );
+                            }
+                        }
+                    })));
+            }
+        } else {
+            list.rows.borrow_mut().clear();
+            list.content.append(&empty_state(
+                "x-office-calendar-symbolic",
+                "Все уроки на эту дату закончились",
+            ));
+            return;
+        }
+    }
     let mut rows = Vec::with_capacity(day.len());
     for lesson in day.iter() {
         let (id, time_of_lesson) = (lesson.id, lesson.time);
-        let row = gtk::Box::new(gtk::Orientation::Horizontal, 16);
+        let row = gtk::Box::new(gtk::Orientation::Horizontal, 12);
         row.add_css_class("panel");
+        row.add_css_class("schedule-lesson");
         if lesson.options.cancelled {
             row.add_css_class("lesson-cancelled");
         }
+        if prefs.compact {
+            row.add_css_class("dense");
+        }
+        row.set_visible(prefs.finished || lesson.date.and_time(options.end_time(lesson)) > now);
         let time = text(&time_label(lesson, options), "muted");
+        time.set_visible(prefs.times);
         time.set_width_chars(5);
-        time.set_valign(gtk::Align::Center);
+        time.set_valign(gtk::Align::Start);
+        time.set_margin_top(2);
         row.append(&time);
-        let details = column(4);
+        let details = column(if prefs.compact { 2 } else { 6 });
         details.add_css_class("lesson-details");
         details.set_hexpand(true);
         details.set_valign(gtk::Align::Center);
         details.append(&lesson_heading(lesson));
         let room = (!lesson.room.trim().is_empty()).then(|| {
             let room = text(&format!("Кабинет {}", lesson.room), "muted");
-            room.set_visible(!options.remote);
+            room.set_visible(!options.remote && crate::settings::display().rooms);
             details.append(&room);
             room
         });
         rows.push(LessonRow { time, room });
-        if !lesson.note.is_empty() {
+        if prefs.notes && !lesson.note.is_empty() {
             let note = text(&format!("Заметка: {}", lesson.note), "muted");
-            note.set_lines(2);
+            note.set_lines(if prefs.compact { 1 } else { 2 });
             note.set_ellipsize(gtk::pango::EllipsizeMode::End);
             note.set_tooltip_text(Some(&lesson.note));
             details.append(&note);
@@ -625,7 +773,11 @@ fn render_lessons(
                 "ДЗ"
             };
 
-            details.append(&text(&format!("{label}: {}", lesson.homework), "muted"));
+            let homework = text(&format!("{label}: {}", lesson.homework), "muted");
+            homework.set_lines(if prefs.compact { 1 } else { 2 });
+            homework.set_ellipsize(gtk::pango::EllipsizeMode::End);
+            homework.set_tooltip_text(Some(&lesson.homework));
+            details.append(&homework);
         }
         row.append(&details);
         let mut focus = None;
@@ -636,6 +788,9 @@ fn render_lessons(
             let button = gtk::Button::from_icon_name(icon);
             button.add_css_class("flat");
             button.set_tooltip_text(Some(label));
+            if editing {
+                Anchor::EditLesson.mark(&button);
+            }
             button.set_valign(gtk::Align::Center);
             if editing && focus_time == Some(lesson.time) {
                 focus = Some(button.clone());
@@ -777,6 +932,7 @@ impl TimePicker {
 
 fn time_spin(maximum: u32, step: f64, label: &str) -> (gtk::SpinButton, Rc<Cell<bool>>) {
     let spin = gtk::SpinButton::with_range(0.0, maximum as f64, step);
+    crate::forms::guard_wheel(&spin);
     spin.set_numeric(true);
     spin.set_wrap(true);
     spin.set_width_chars(2);
@@ -866,9 +1022,13 @@ fn on_add_lesson(
     else {
         return;
     };
-    let config = crate::settings::load_settings().unwrap_or_default();
-    let lesson_minutes = config.bells.lesson_minutes as i64;
-    let bells = match config.bells.slots() {
+    let config = lessons
+        .data()
+        .bells
+        .clone()
+        .unwrap_or_else(|| crate::settings::load_settings().unwrap_or_default().bells);
+    let lesson_minutes = config.lesson_minutes as i64;
+    let bells = match config.slots() {
         Ok(bells) => bells,
         Err(error) => {
             notify(status, &error);
@@ -938,6 +1098,7 @@ fn on_add_lesson(
     );
     let strings: Vec<&str> = labels.iter().map(String::as_str).collect();
     let number = gtk::DropDown::from_strings(&strings);
+    crate::forms::guard_wheel(&number);
     number.set_widget_name("lesson-number");
     number.set_selected(selected_bell.map_or(0, |index| index as u32 + 1));
     form.append(&number);
@@ -1077,6 +1238,7 @@ fn on_add_lesson(
         "Контрольная работа",
         "Самостоятельная работа",
     ]);
+    crate::forms::guard_wheel(&work);
     let work_label = text("Вид работы", "section");
     work_label.set_mnemonic_widget(Some(&work));
     extras_form.append(&work_label);

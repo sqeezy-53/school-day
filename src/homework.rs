@@ -23,8 +23,27 @@ pub fn homework_page(status: &gtk::Label, lessons: Lessons, undo: Option<&UndoHa
     page.append(&open);
     let done = column(0);
     let completed = gtk::Expander::new(None);
-    completed.set_child(Some(&done));
-    page.append(&completed);
+    let complete_header = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+    completed.set_valign(gtk::Align::Center);
+    let clear = gtk::Button::from_icon_name("user-trash-symbolic");
+    clear.set_tooltip_text(Some("Очистить выполненные"));
+    clear.update_property(&[gtk::accessible::Property::Label("Очистить выполненные")]);
+    clear.add_css_class("flat");
+    clear.add_css_class("circular");
+    clear.add_css_class("clear-completed");
+    clear.set_valign(gtk::Align::Center);
+    clear.set_visible(false);
+    complete_header.append(&completed);
+    complete_header.append(&clear);
+    page.append(&complete_header);
+    page.append(&done);
+    done.set_visible(false);
+    let weak_done = done.downgrade();
+    completed.connect_expanded_notify(move |expander| {
+        if let Some(done) = weak_done.upgrade() {
+            done.set_visible(expander.is_expanded());
+        }
+    });
 
     let list = Rc::new(HomeworkList {
         lessons,
@@ -34,6 +53,7 @@ pub fn homework_page(status: &gtk::Label, lessons: Lessons, undo: Option<&UndoHa
         open,
         done,
         completed,
+        clear: clear.clone(),
         undo: undo.cloned(),
     });
     let weak_list = Rc::downgrade(&list);
@@ -43,6 +63,49 @@ pub fn homework_page(status: &gtk::Label, lessons: Lessons, undo: Option<&UndoHa
         }
     });
 
+    let weak_list = Rc::downgrade(&list);
+    clear.connect_clicked(move |_| {
+        let Some(list) = weak_list.upgrade() else {
+            return;
+        };
+        let count = list.lessons.completed_homework_count();
+        if count == 0 {
+            return;
+        }
+        let weak = Rc::downgrade(&list);
+        crate::confirm_removal(
+            &list.status,
+            "Очистить выполненные задания?",
+            &format!("Будет удалено заданий: {count}."),
+            move || {
+                let Some(list) = weak.upgrade() else {
+                    return;
+                };
+                match list.lessons.clear_completed_homework(count) {
+                    Ok(()) => {
+                        list.render(Some(RowFocus::Add));
+                        if let Some(handle) = &list.undo {
+                            let pages = list
+                                .open
+                                .ancestor(gtk::Stack::static_type())
+                                .and_downcast::<gtk::Stack>()
+                                .map(|pages| pages.downgrade());
+                            handle.offer_batch(&list.lessons, move || {
+                                if let Some(pages) =
+                                    pages.as_ref().and_then(|pages| pages.upgrade())
+                                {
+                                    crate::refresh_records(&pages);
+                                }
+                            });
+                        } else {
+                            notify(&list.status, "Выполненные задания удалены");
+                        }
+                    }
+                    Err(error) => notify(&list.status, &error),
+                }
+            },
+        );
+    });
     if undo.is_some() {
         let weak_list = Rc::downgrade(&list);
         list.lessons.connect_restored(move |_, removed| {
@@ -53,6 +116,29 @@ pub fn homework_page(status: &gtk::Label, lessons: Lessons, undo: Option<&UndoHa
             }
         });
     }
+    let (edit, refresh) = (Rc::downgrade(&list), Rc::downgrade(&list));
+    crate::search::actions(
+        &page,
+        move |raw| {
+            if let Some(list) = edit.upgrade()
+                && let Some((kind, id)) = raw.split_at_checked(1)
+                && let Ok(id) = id.parse()
+            {
+                list.edit(Some(if kind == "l" {
+                    HomeworkId::Linked(id)
+                } else {
+                    HomeworkId::Pending(id)
+                }));
+            }
+        },
+        move || {
+            if let Some(list) = refresh.upgrade()
+                && list.open.is_mapped()
+            {
+                list.render(None);
+            }
+        },
+    );
     page.connect_map(move |_| list.render(None));
     page
 }
@@ -72,6 +158,7 @@ struct HomeworkList {
     open: gtk::Box,
     done: gtk::Box,
     completed: gtk::Expander,
+    clear: gtk::Button,
     undo: Option<UndoHandle>,
 }
 
@@ -95,6 +182,7 @@ impl HomeworkList {
             self.completed.set_expanded(false);
         }
         self.completed.set_sensitive(done > 0);
+        self.clear.set_visible(done > 0);
 
         if tasks.len() == done {
             let message = if done == 0 {
@@ -120,7 +208,6 @@ impl HomeworkList {
         row.add_css_class("panel");
 
         let checkbox = gtk::CheckButton::new();
-        Anchor::CompleteHomework.mark(&checkbox);
         checkbox.set_tooltip_text(Some(&format!("ДЗ выполнено: {}", task.title)));
         checkbox.set_valign(gtk::Align::Start);
         checkbox.set_active(task.completed);
@@ -132,13 +219,8 @@ impl HomeworkList {
             title.push_str(&format!(" · {}", date.format("%d.%m.%Y")));
         }
         details.append(&text(&title, "section"));
-        if let HomeworkId::Linked(lesson) = id {
-            if let Some(lesson) = self.lessons.borrow().iter().find(|item| item.id == lesson) {
-                details.append(&text(
-                    &format!("Урок в {}", lesson.time.format("%H:%M")),
-                    "muted",
-                ));
-            }
+        if let Some(time) = task.lesson_time {
+            details.append(&text(&format!("Урок в {}", time.format("%H:%M")), "muted"));
         } else {
             details.append(&text("Без урока", "section"));
         }
@@ -304,6 +386,7 @@ impl HomeworkList {
         }
         let labels: Vec<_> = choices.iter().map(|(_, label)| label.as_str()).collect();
         let selector = gtk::DropDown::from_strings(&labels);
+        crate::forms::guard_wheel(&selector);
         selector.set_enable_search(choices.len() > 5);
         selector.set_sensitive(choices.len() > 1);
         let choices = Rc::new(RefCell::new(choices));
@@ -851,7 +934,8 @@ mod tests {
         let normal = Lessons::new(data);
         assert_eq!(initial_lesson_date(&normal, None, &settings, today), today);
         let task = Homework {
-            id: HomeworkId::Pending(99),
+            lesson_time: None,
+            id: HomeworkId::Pending(RecordId::from_u128(99)),
             title: "Алгебра".into(),
             date: today.pred_opt(),
             body: "Задание".into(),

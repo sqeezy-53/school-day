@@ -7,6 +7,8 @@ use std::time::Duration;
 
 use crate::{column, notify, primary, text};
 
+#[cfg(target_os = "linux")]
+mod flatpak;
 mod markdown;
 #[cfg(windows)]
 mod windows;
@@ -82,10 +84,95 @@ fn latest() -> Result<Release, String> {
     Ok(release)
 }
 
+#[derive(Clone, Copy)]
+pub enum Preference {
+    Automatic,
+    Badge,
+}
+
+fn popover_parts(button: &gtk::MenuButton, version: &str) -> (gtk::Popover, gtk::Box, gtk::Button) {
+    let popover = gtk::Popover::new();
+    popover.set_position(gtk::PositionType::Top);
+    popover.set_has_arrow(false);
+    popover.add_css_class("updates-popover");
+    popover.set_halign(gtk::Align::Start);
+    popover.set_offset(0, -4);
+    let body = column(10);
+    body.set_width_request(260);
+    crate::margins(&body, 12);
+    body.add_css_class("update-card");
+    let heading = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+    let description = column(2);
+    description.set_hexpand(true);
+    description.append(&text("Обновления", "settings-title"));
+    description.append(&text(version, "muted"));
+    heading.append(&description);
+    let check = gtk::Button::from_icon_name("view-refresh-symbolic");
+    check.add_css_class("flat");
+    check.add_css_class("circular");
+    check.set_valign(gtk::Align::Center);
+    check.set_tooltip_text(Some("Проверить обновления"));
+    check.update_property(&[gtk::accessible::Property::Label("Проверить обновления")]);
+    heading.append(&check);
+    body.append(&heading);
+    popover.set_child(Some(&body));
+    button.set_popover(Some(&popover));
+    (popover, body, check)
+}
+
+fn preference_switch(parent: &gtk::Box, title: &str, active: bool) -> gtk::Switch {
+    let row = gtk::Box::new(gtk::Orientation::Horizontal, 10);
+    row.set_height_request(28);
+    let label = text(title, "section");
+    label.set_hexpand(true);
+    label.set_max_width_chars(25);
+    let switch = gtk::Switch::builder()
+        .active(active)
+        .valign(gtk::Align::Center)
+        .build();
+    switch.update_property(&[gtk::accessible::Property::Label(title)]);
+    label.set_mnemonic_widget(Some(&switch));
+    row.append(&label);
+    row.append(&switch);
+    parent.append(&row);
+    switch
+}
+
+fn append_badge_switch(
+    box_: &gtk::Box,
+    enabled: bool,
+    save: impl Fn(bool) -> Result<(), String> + 'static,
+    feedback: &gtk::Label,
+) {
+    let check = preference_switch(box_, "Показывать индикатор обновления", enabled);
+    let saved = Cell::new(enabled);
+    let feedback = feedback.downgrade();
+    check.connect_active_notify(move |check| {
+        let active = check.is_active();
+        if active == saved.get() {
+            return;
+        }
+        match save(active) {
+            Ok(()) => saved.set(active),
+            Err(error) => {
+                check.set_active(saved.get());
+                if let Some(feedback) = feedback.upgrade() {
+                    notify(&feedback, &error);
+                }
+            }
+        }
+    });
+}
+
 pub fn indicator(
     automatic: bool,
-    on_change: impl Fn(bool) -> Result<(), String> + 'static,
+    badge: bool,
+    on_change: impl Fn(Preference, bool) -> Result<(), String> + 'static,
 ) -> gtk::MenuButton {
+    #[cfg(target_os = "linux")]
+    if std::path::Path::new("/.flatpak-info").is_file() {
+        return flatpak::indicator(automatic, badge, on_change);
+    }
     let indicator = gtk::MenuButton::new();
     indicator.set_direction(gtk::ArrowType::Up);
     let icon = gtk::DrawingArea::new();
@@ -132,38 +219,10 @@ pub fn indicator(
     indicator.add_css_class("update-indicator");
     indicator.set_halign(gtk::Align::Start);
     indicator.set_valign(gtk::Align::Center);
-    let popover = gtk::Popover::new();
-    popover.set_has_arrow(false);
-    popover.add_css_class("updates-popover");
-    popover.set_halign(gtk::Align::Start);
-    popover.set_offset(0, -4);
-    let root = column(10);
-    root.set_width_request(272);
-    crate::margins(&root, 16);
-    root.add_css_class("update-card");
-    popover.set_child(Some(&root));
-    indicator.set_popover(Some(&popover));
-    let heading = gtk::Box::new(gtk::Orientation::Horizontal, 12);
-    let title = text("Обновления", "settings-title");
-    title.set_hexpand(true);
-    heading.append(&title);
-    let check = gtk::Button::from_icon_name("view-refresh-symbolic");
-    check.add_css_class("flat");
-    check.add_css_class("circular");
-    check.set_tooltip_text(Some("Проверить обновления"));
-    heading.append(&check);
-    root.append(&heading);
-    root.append(&text(&format!("Версия {VERSION}"), "section"));
-    let automatic_row = gtk::Box::new(gtk::Orientation::Horizontal, 12);
-    let automatic_label = text("Автопроверка", "section");
-    automatic_label.set_hexpand(true);
-    let automatic_check = gtk::Switch::new();
-    automatic_check.set_valign(gtk::Align::Center);
-    automatic_label.set_mnemonic_widget(Some(&automatic_check));
-    automatic_check.set_active(automatic);
-    automatic_row.append(&automatic_label);
-    automatic_row.append(&automatic_check);
-    root.append(&automatic_row);
+    let (popover, root, check) = popover_parts(&indicator, &format!("Версия {VERSION}"));
+    let preferences = column(4);
+    root.append(&preferences);
+    let automatic_check = preference_switch(&preferences, "Проверять при запуске", automatic);
     let spinner = gtk::Spinner::new();
     spinner.set_halign(gtk::Align::Start);
     spinner.set_visible(false);
@@ -266,13 +325,28 @@ pub fn indicator(
             }
         }
     });
+    let on_change = Rc::new(on_change);
+    let save_badge = Rc::clone(&on_change);
+    let view_badge = Rc::clone(&view);
+    append_badge_switch(
+        &preferences,
+        badge,
+        move |active| {
+            save_badge(Preference::Badge, active)?;
+            if let Some(dot) = view_badge.dot.upgrade() {
+                dot.set_visible(active && view_badge.release.borrow().is_some());
+            }
+            Ok(())
+        },
+        &feedback,
+    );
     let saving = Rc::clone(&view);
     let saved_automatic = Cell::new(automatic);
     automatic_check.connect_active_notify(move |button| {
         if button.is_active() == saved_automatic.get() {
             return;
         }
-        match on_change(button.is_active()) {
+        match on_change(Preference::Automatic, button.is_active()) {
             Ok(()) => {
                 saved_automatic.set(button.is_active());
                 if button.is_active() {
@@ -434,7 +508,7 @@ impl UpdateView {
             indicator.set_tooltip_text(Some(&available));
         }
         if let Some(dot) = self.dot.upgrade() {
-            dot.set_visible(true);
+            dot.set_visible(crate::settings::display().update_badge);
         }
         if let Some(notes) = self.notes.upgrade() {
             let body: String = release
@@ -470,14 +544,16 @@ mod tests {
         adw::init().unwrap();
         let attempts = Rc::new(Cell::new(0));
         let recorded = Rc::clone(&attempts);
-        let indicator = indicator(false, move |_| {
+        let indicator = indicator(false, true, move |_, _| {
             recorded.set(recorded.get() + 1);
             Err("Нет доступа для записи".into())
         });
         let mut widgets = vec![indicator.popover().unwrap().upcast::<gtk::Widget>()];
         let mut automatic = None;
         while let Some(widget) = widgets.pop() {
-            if let Some(switch) = widget.downcast_ref::<gtk::Switch>() {
+            if let Some(switch) = widget.downcast_ref::<gtk::Switch>()
+                && !switch.is_active()
+            {
                 automatic = Some(switch.clone());
                 break;
             }

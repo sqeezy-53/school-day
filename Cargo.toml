@@ -1,15 +1,23 @@
 [package]
 name = "school_app_learning"
-version = "0.6.2"
+version = "1.0.0"
 edition = "2024"
 default-run = "school_app_learning"
 rust-version = "1.92"
 license = "GPL-3.0-only"
 
+[workspace]
+members = ["crates/school-day-core", "crates/school-day-android"]
+default-members = ["."]
+resolver = "3"
+
 [dependencies]
+school-day-core = { path = "crates/school-day-core" }
 adw = { version = "0.9.2", package = "libadwaita", features = ["v1_7"] }
 chrono = { version = "0.4.45", features = ["serde"] }
 gtk = { version = "0.11.5", package = "gtk4", features = ["v4_10"] }
+if-addrs = "0.15"
+qrcode = { version = "0.14.1", default-features = false }
 pulldown-cmark = { version = "0.13", default-features = false }
 semver = "1"
 serde = { version = "1.0.229", features = ["derive"] }

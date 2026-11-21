@@ -1,0 +1,60 @@
+name: Подготовить согласованные Linux и Android сборки
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        type: string
+        required: true
+        description: Существующий тег основного School Day
+      expected_sha:
+        type: string
+        required: true
+        description: Полный проверенный SHA коммита тега
+      mode:
+        type: choice
+        options: [test, prepare]
+        default: test
+        description: Тестовые артефакты или подготовка пакетов
+permissions:
+  contents: read
+jobs:
+  verify:
+    if: github.repository == 'sqeezy-53/school-day'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - env:
+          TAG: ${{ inputs.tag }}
+          SHA: ${{ inputs.expected_sha }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          test "$GITHUB_REF" = "refs/heads/$DEFAULT_BRANCH"
+          [[ "$TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
+          [[ "$SHA" =~ ^[0-9a-f]{40}$ ]]
+          git fetch --quiet --no-tags --depth=1 origin "refs/tags/$TAG"
+          test "$(git rev-parse 'FETCH_HEAD^{commit}')" = "$SHA"
+          version=$(git show "$SHA:Cargo.toml" | python3 -c 'import sys,tomllib; print(tomllib.loads(sys.stdin.read())["package"]["version"])')
+          test "v$version" = "$TAG"
+  dispatch:
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        repository: [school-day-flatpak, school-day-android]
+    steps:
+      - name: Передать один и тот же тег и SHA
+        env:
+          GH_TOKEN: ${{ secrets.DISTRIBUTION_DISPATCH_TOKEN }}
+          TARGET: ${{ matrix.repository }}
+          TAG: ${{ inputs.tag }}
+          SHA: ${{ inputs.expected_sha }}
+          MODE: ${{ inputs.mode }}
+        run: |
+          test -n "$GH_TOKEN" || { echo 'Set DISTRIBUTION_DISPATCH_TOKEN with Actions write permission on the two distribution repositories'; exit 1; }
+          gh workflow run build.yml --repo "sqeezy-53/$TARGET" --ref main \
+            -f source="$TAG" -f expected_sha="$SHA" -f mode="$MODE"

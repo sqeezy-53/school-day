@@ -1,67 +1,11 @@
 use adw::prelude::*;
-use chrono::{Duration, NaiveTime, Timelike};
+use chrono::{NaiveTime, Timelike};
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use crate::{column, text};
 
-#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
-#[serde(default)]
-pub struct BellSchedule {
-    pub lesson_minutes: u32,
-    pub first_start: NaiveTime,
-    pub breaks: Vec<u32>,
-}
-
-impl Default for BellSchedule {
-    fn default() -> Self {
-        Self {
-            lesson_minutes: 40,
-            first_start: NaiveTime::from_hms_opt(8, 0, 0).unwrap(),
-            breaks: vec![10, 10, 15, 15, 10, 10, 10, 10],
-        }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct Bell {
-    pub start: NaiveTime,
-    pub end: NaiveTime,
-}
-
-impl BellSchedule {
-    pub fn slots(&self) -> Result<Vec<Bell>, String> {
-        if ![40, 45].contains(&self.lesson_minutes) {
-            return Err("Длительность урока: 40 или 45 минут".to_string());
-        }
-        if self.breaks.len() > 11 {
-            return Err("Можно задать от 1 до 12 уроков".to_string());
-        }
-        if self.breaks.iter().any(|minutes| *minutes > 120) {
-            return Err("Перемена должна быть от 0 до 120 минут".to_string());
-        }
-
-        let mut slots = Vec::with_capacity(self.breaks.len() + 1);
-        let mut start = self.first_start;
-        for index in 0..=self.breaks.len() {
-            let end = add_minutes(start, self.lesson_minutes)?;
-            slots.push(Bell { start, end });
-            if let Some(minutes) = self.breaks.get(index) {
-                start = add_minutes(end, *minutes)?;
-            }
-        }
-        Ok(slots)
-    }
-}
-
-fn add_minutes(time: NaiveTime, minutes: u32) -> Result<NaiveTime, String> {
-    let (result, overflow) = time.overflowing_add_signed(Duration::minutes(minutes as i64));
-    if overflow != 0 {
-        return Err("Звонки должны закончиться до полуночи".to_string());
-    }
-    Ok(result)
-}
-
+pub use school_day_core::bells::*;
 struct ClockLabels {
     start: gtk::glib::WeakRef<gtk::Label>,
     end: gtk::glib::WeakRef<gtk::Label>,
@@ -230,7 +174,7 @@ pub fn editor(
     root.add_css_class("settings-section");
     let title = text("Звонки", "settings-title");
     title.set_halign(gtk::Align::Start);
-    crate::tutorial::Anchor::Bells.mark(&title);
+
     root.append(&title);
     let controls = adw::WrapBox::new();
     controls.set_child_spacing(32);
@@ -239,6 +183,7 @@ pub fn editor(
     length_group.set_hexpand(true);
     length_group.append(&text("Длительность", "section"));
     let duration = gtk::DropDown::from_strings(&["40 мин", "45 мин"]);
+    crate::forms::guard_wheel(&duration);
     duration.set_selected(u32::from(initial.lesson_minutes == 45));
     duration.set_tooltip_text(Some("Длительность урока"));
     length_group.append(&duration);
@@ -297,6 +242,7 @@ pub fn editor(
 
 fn number_input(minimum: f64, maximum: f64, value: u32, label: &str) -> gtk::SpinButton {
     let spin = gtk::SpinButton::with_range(minimum, maximum, 1.0);
+    crate::forms::guard_wheel(&spin);
     spin.set_numeric(true);
     spin.set_width_chars(2);
     spin.set_update_policy(gtk::SpinButtonUpdatePolicy::IfValid);

@@ -1,0 +1,18 @@
+[package]
+name = "school-day-core"
+version = "1.0.0"
+edition = "2024"
+license = "GPL-3.0-only"
+
+[dependencies]
+chrono = { version = "0.4.45", features = ["serde"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+uuid = { version = "1", features = ["v4", "serde"] }
+base64 = "0.22"
+ring = "0.17.14"
+rustls = { version = "0.23.46", default-features = false, features = ["ring", "std"] }
+subtle = "2.6"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"

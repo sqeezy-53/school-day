@@ -2,18 +2,7 @@ use adw::prelude::*;
 use gtk::gdk::{Key, ModifierType};
 use gtk::glib::Propagation;
 
-pub const SUBJECT_LIMIT: usize = 64;
-pub const ROOM_LIMIT: usize = 12;
-pub const CLASS_LIMIT: usize = 12;
-pub const HOMEWORK_LIMIT: usize = 2000;
-
-pub fn length_error(value: &str, previous: &str, limit: usize) -> Option<String> {
-    if value == previous {
-        return None;
-    }
-    let count = value.chars().count();
-    (count > limit).then(|| format!("Максимум {limit} символов. Сейчас {count}."))
-}
+pub use school_day_core::forms::*;
 
 pub fn error_label(form: &gtk::Box, widget: &impl IsA<gtk::Widget>) -> gtk::Label {
     let label = crate::text("", "form-error");
@@ -24,6 +13,7 @@ pub fn error_label(form: &gtk::Box, widget: &impl IsA<gtk::Widget>) -> gtk::Labe
 
 pub fn time_input(maximum: f64, value: u32, label: &str) -> gtk::SpinButton {
     let spin = gtk::SpinButton::with_range(0.0, maximum, 1.0);
+    crate::forms::guard_wheel(&spin);
     spin.set_numeric(true);
     spin.set_wrap(true);
     spin.set_width_chars(2);
@@ -87,6 +77,50 @@ pub fn dialog_keys(window: &adw::Window, cancel: &gtk::Button, save: Option<&gtk
             Propagation::Proceed
         });
         window.add_controller(keys);
+    }
+}
+
+type ScrollController = (
+    gtk::glib::WeakRef<gtk::EventControllerScroll>,
+    gtk::PropagationPhase,
+);
+thread_local! {
+    static WHEEL: std::cell::RefCell<Vec<ScrollController>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+pub fn set_wheel(allow: bool) {
+    WHEEL.with_borrow_mut(|items| {
+        items.retain(|(weak, phase)| {
+            if let Some(controller) = weak.upgrade() {
+                controller.set_propagation_phase(if allow {
+                    *phase
+                } else {
+                    gtk::PropagationPhase::None
+                });
+                true
+            } else {
+                false
+            }
+        })
+    });
+}
+
+pub fn guard_wheel(widget: &impl IsA<gtk::Widget>) {
+    for control in widget
+        .observe_controllers()
+        .iter::<gtk::glib::Object>()
+        .flatten()
+    {
+        if let Ok(scroll) = control.downcast::<gtk::EventControllerScroll>() {
+            let phase = scroll.propagation_phase();
+            WHEEL.with_borrow_mut(|items| {
+                items.retain(|(w, _)| w.upgrade().is_some());
+                items.push((scroll.downgrade(), phase));
+            });
+            if !crate::settings::display().wheel {
+                scroll.set_propagation_phase(gtk::PropagationPhase::None);
+            }
+        }
     }
 }
 

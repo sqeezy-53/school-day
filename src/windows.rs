@@ -1,6 +1,8 @@
 use std::os::windows::prelude::OwnedHandle;
 use std::os::windows::process::CommandExt;
 
+pub const ALREADY_RUNNING: &str = "Школьный день уже запущен";
+
 pub fn initialize() -> Result<OwnedHandle, String> {
     let guard = running_guard()?;
     prepare_runtime()?;
@@ -53,10 +55,60 @@ pub fn running_guard() -> Result<OwnedHandle, String> {
     let guard = unsafe { OwnedHandle::from_raw_handle(handle) };
 
     if os_error.raw_os_error() == Some(183) {
-        return Err("Школьный день уже запущен".to_string());
+        return Err(ALREADY_RUNNING.to_string());
     }
     check_installing()?;
     Ok(guard)
+}
+
+pub fn show_running_window() -> bool {
+    use std::ffi::c_void;
+    use std::os::windows::io::FromRawHandle;
+    #[link(name = "user32")]
+    unsafe extern "system" {
+        fn FindWindowW(class: *const u16, title: *const u16) -> *mut c_void;
+        fn GetWindowThreadProcessId(window: *mut c_void, process: *mut u32) -> u32;
+        fn ShowWindowAsync(window: *mut c_void, command: i32) -> i32;
+        fn SetForegroundWindow(window: *mut c_void) -> i32;
+    }
+    #[link(name = "kernel32")]
+    unsafe extern "system" {
+        fn OpenProcess(access: u32, inherit: i32, process: u32) -> *mut c_void;
+        fn QueryFullProcessImageNameW(
+            process: *mut c_void,
+            flags: u32,
+            path: *mut u16,
+            length: *mut u32,
+        ) -> i32;
+    }
+    let Ok(current) = std::env::current_exe() else {
+        return false;
+    };
+    let title: Vec<u16> = "Школьный день".encode_utf16().chain(Some(0)).collect();
+    let window = unsafe { FindWindowW(std::ptr::null(), title.as_ptr()) };
+    if window.is_null() {
+        return false;
+    }
+    let mut pid = 0;
+    unsafe { GetWindowThreadProcessId(window, &mut pid) };
+    let process = unsafe { OpenProcess(0x1000, 0, pid) };
+    if process.is_null() {
+        return false;
+    }
+    let _guard = unsafe { OwnedHandle::from_raw_handle(process) };
+    let mut path = vec![0u16; 32768];
+    let mut size = path.len() as u32;
+    if unsafe { QueryFullProcessImageNameW(process, 0, path.as_mut_ptr(), &mut size) } == 0
+        || String::from_utf16_lossy(&path[..size as usize]).to_lowercase()
+            != current.to_string_lossy().to_lowercase()
+    {
+        return false;
+    }
+    unsafe {
+        ShowWindowAsync(window, 9);
+        SetForegroundWindow(window);
+    }
+    true
 }
 
 pub fn prepare_runtime() -> Result<(), String> {

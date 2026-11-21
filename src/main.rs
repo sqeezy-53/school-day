@@ -6,9 +6,14 @@ mod homework;
 mod lessons;
 mod renderer;
 mod schedule;
+mod search;
 mod seasonal;
 mod settings;
+mod startup;
 mod storage;
+mod sync_host;
+mod sync_ui;
+mod transfer;
 mod tutorial;
 mod undo;
 mod updates;
@@ -30,6 +35,9 @@ fn main() -> gtk::glib::ExitCode {
     #[cfg(target_os = "windows")]
     let _running = match windows::initialize() {
         Ok(guard) => guard,
+        Err(error) if error == windows::ALREADY_RUNNING && windows::show_running_window() => {
+            return gtk::glib::ExitCode::SUCCESS;
+        }
         Err(error) => {
             windows::show_error(&error);
             return gtk::glib::ExitCode::FAILURE;
@@ -39,7 +47,10 @@ fn main() -> gtk::glib::ExitCode {
     gtk::glib::set_application_name("Школьный день");
     let app = adw::Application::builder().application_id(APP_ID).build();
     app.connect_activate(|app| {
-        if let Some(window) = app.active_window() {
+        if let Some(window) = app
+            .active_window()
+            .or_else(|| app.windows().into_iter().next())
+        {
             window.present();
         } else {
             build_window(app);
@@ -59,32 +70,6 @@ fn main() -> gtk::glib::ExitCode {
 }
 
 fn build_window(app: &adw::Application) {
-    let data_guard = match storage::lock_data() {
-        Ok(guard) => guard,
-        Err(error) => {
-            let content = column(18);
-            margins(&content, 24);
-            content.append(&text("Не удалось открыть данные", "title"));
-            content.append(&text(&error, "section"));
-            let close = primary("Закрыть");
-            content.append(&close);
-            let window = adw::ApplicationWindow::builder()
-                .application(app)
-                .title("Школьный день")
-                .default_width(520)
-                .default_height(220)
-                .content(&content)
-                .build();
-            let weak_window = window.downgrade();
-            close.connect_clicked(move |_| {
-                if let Some(window) = weak_window.upgrade() {
-                    window.close();
-                }
-            });
-            window.present();
-            return;
-        }
-    };
     gtk::Window::set_default_icon_name(APP_ID);
     let css = gtk::CssProvider::new();
     css.load_from_data(&format!("{CSS}\n{}", seasonal::css()));
@@ -93,6 +78,98 @@ fn build_window(app: &adw::Application) {
         &css,
         gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
     );
+    let stack = gtk::Stack::new();
+    stack.set_hhomogeneous(false);
+    stack.set_vhomogeneous(false);
+    let window = adw::ApplicationWindow::builder()
+        .application(app)
+        .title("Школьный день")
+        .default_width(1040)
+        .default_height(700)
+        .width_request(360)
+        .height_request(320)
+        .content(&stack)
+        .build();
+    gtk::glib::spawn_future_local(async move {
+        let locked = gtk::gio::spawn_blocking(|| {
+            let guard = storage::lock_data()?;
+            Ok::<_, String>((guard, settings::load_settings()))
+        })
+        .await
+        .unwrap_or_else(|_| Err("Не удалось открыть данные".into()));
+        let (guard, config) = match locked {
+            Ok(startup) => startup,
+            Err(error) => {
+                show_startup_error(&window, &error);
+                return;
+            }
+        };
+        if let Ok(config) = &config {
+            settings::apply_color_scheme(config);
+            settings::set_display(config.display);
+        }
+        let animated = startup::show(&stack);
+        if animated {
+            window.present();
+            renderer::record_actual(&window);
+        }
+        let weak = window.downgrade();
+        drop(window);
+        let bells = config.as_ref().ok().map(|value| value.bells.clone());
+        let loaded = gtk::gio::spawn_blocking(move || {
+            let sync_error = school_day_core::lan::recover(&storage::data_dir()).err();
+            let schedule = lessons::read_schedule(bells);
+            (guard, schedule, sync_error)
+        })
+        .await;
+        let Some(window) = weak.upgrade() else {
+            return;
+        };
+        let (guard, schedule, sync_error) = match loaded {
+            Ok(loaded) => loaded,
+            Err(_) => {
+                show_startup_error(&window, "Не удалось загрузить расписание.");
+                return;
+            }
+        };
+        let workspace = build_workspace(&window, guard, config, schedule, sync_error);
+        stack.add_named(&workspace, Some(startup::WORKSPACE));
+        if !animated {
+            window.present();
+            renderer::record_actual(&window);
+        }
+    });
+}
+
+fn show_startup_error(window: &adw::ApplicationWindow, error: &str) {
+    let content = column(18);
+    margins(&content, 24);
+    content.append(&text("Не удалось открыть данные", "page-title"));
+    content.append(&text(error, "section"));
+    let close = primary("Закрыть");
+    content.append(&close);
+    let weak = window.downgrade();
+    close.connect_clicked(move |_| {
+        if let Some(window) = weak.upgrade() {
+            window.close();
+        }
+    });
+    window.set_default_size(520, 220);
+    window.set_content(Some(&content));
+    window.present();
+}
+
+fn build_workspace(
+    window: &adw::ApplicationWindow,
+    data_guard: std::fs::File,
+    config: Result<settings::Settings, String>,
+    schedule: Result<(lessons::SchoolData, Option<std::path::PathBuf>), String>,
+    sync_error: Option<school_day_core::lan::Error>,
+) -> gtk::Overlay {
+    let app = window
+        .application()
+        .and_downcast::<adw::Application>()
+        .unwrap();
     let root = column(0);
     let header = adw::HeaderBar::new();
     if let Some(layout) =
@@ -117,7 +194,8 @@ fn build_window(app: &adw::Application) {
     brand.set_tooltip_text(Some("Школьный день"));
     let identity = gtk::Box::new(gtk::Orientation::Horizontal, 8);
     identity.set_margin_start(10);
-    identity.append(&brand_logo());
+    let logo = brand_logo();
+    identity.append(&logo);
     identity.append(&brand);
     brand
         .bind_property("tooltip-text", &identity, "tooltip-text")
@@ -132,15 +210,33 @@ fn build_window(app: &adw::Application) {
     status.set_visible(false);
     let undo = undo::UndoBar::new(&status);
     let undo_handle = undo.handle();
-    let schedule_calendar = match lessons::load_lessons() {
-        Ok(loaded) => {
-            let items = lessons::Lessons::new(loaded);
+    let data_guard = std::sync::Arc::new(data_guard);
+    let local_changes = sync_host::LocalChanges::default();
+    let mut model = None;
+    let schedule_calendar = match schedule {
+        Ok((data, migration)) => {
+            let changes = local_changes.clone();
+            let items = lessons::Lessons::with_writer(data, move |updated| {
+                storage::save_schedule(updated)?;
+                changes.saved();
+                Ok(())
+            });
+            if let Some(path) = migration {
+                notify(
+                    &status,
+                    &format!(
+                        "Расписание переведено в новый формат. Исходная копия: {}",
+                        path.display()
+                    ),
+                );
+            }
             let (schedule, calendar) = schedule_page(&status, items.clone(), Some(&undo_handle));
+            model = Some(items.clone());
             pages.add_named(&schedule, Some("schedule"));
-            pages.add_named(
-                &homework::homework_page(&status, items, Some(&undo_handle)),
-                Some("homework"),
-            );
+            let homework = homework::homework_page(&status, items.clone(), Some(&undo_handle));
+            pages.add_named(&homework, Some("homework"));
+            header.pack_end(&search::button(&items, &schedule, &homework));
+            reminders(&app, items);
             Some(calendar)
         }
         Err(error) => {
@@ -150,17 +246,50 @@ fn build_window(app: &adw::Application) {
                     &format!("Не удалось загрузить уроки: {error}"),
                     "form-error",
                 ));
+                content.append(&transfer::recovery_button(&status));
                 pages.add_named(&content, Some(name));
             }
             None
         }
     };
+    if let Some(error) = sync_error {
+        notify(&status, &format!("Обмен не завершён. {error}"));
+    }
     let service = gtk::Box::new(gtk::Orientation::Horizontal, 8);
     service.add_css_class("service-bar");
-    pages.add_named(
-        &settings::settings_page(&status, &brand, &service),
-        Some("settings"),
+    let sync_host = model
+        .as_ref()
+        .map(|items| sync_host::Host::new(items, &local_changes, data_guard.clone()));
+    if let Some(host) = sync_host.clone() {
+        window.connect_close_request(move |window| {
+            if host.background() {
+                #[cfg(target_os = "windows")]
+                window.minimize();
+                #[cfg(not(target_os = "windows"))]
+                window.set_visible(false);
+                gtk::glib::Propagation::Stop
+            } else {
+                gtk::glib::Propagation::Proceed
+            }
+        });
+    }
+    let settings_page = settings::settings_page(
+        model.as_ref(),
+        &status,
+        &brand,
+        &service,
+        config,
+        sync_host.as_ref(),
     );
+    pages.add_named(&settings_page, Some("settings"));
+    let settings_page = settings_page.downgrade();
+    pages.connect_visible_child_notify(move |pages| {
+        if pages.visible_child_name().as_deref() != Some("settings")
+            && let Some(page) = settings_page.upgrade()
+        {
+            let _ = page.activate_action("school-settings.home", None);
+        }
+    });
     let navigation = gtk::Box::new(gtk::Orientation::Horizontal, 3);
     navigation.add_css_class("navigation");
     header.set_title_widget(Some(&navigation));
@@ -204,6 +333,17 @@ fn build_window(app: &adw::Application) {
         navigation.append(&button);
         button
     });
+    let nav = tabs.each_ref().map(|b| b.downgrade());
+    pages.connect_visible_child_notify(move |pages| {
+        if let Some(name) = pages.visible_child_name()
+            && let Some(i) = ["schedule", "homework", "settings"]
+                .iter()
+                .position(|n| *n == name.as_str())
+            && let Some(button) = nav[i].upgrade()
+        {
+            button.set_active(true);
+        }
+    });
     let workspace = column(18);
     margins(&workspace, 32);
     for margin in ["margin-start", "margin-end", "margin-top", "margin-bottom"] {
@@ -246,44 +386,60 @@ fn build_window(app: &adw::Application) {
         "css-classes",
         Some(&gtk::glib::StrV::from(["compact-layout"]).to_value()),
     );
-    let window = adw::ApplicationWindow::builder()
-        .application(app)
-        .title("Школьный день")
-        .default_width(1040)
-        .default_height(700)
-        .width_request(360)
-        .height_request(320)
-        .content(&overlay)
-        .build();
     window.add_breakpoint(compact);
     if let Some(calendar) = &schedule_calendar {
-        seasonal::attach(&window, &overlay, calendar);
+        seasonal::attach(window, &overlay, calendar);
     }
     let keys = gtk::EventControllerKey::new();
     keys.set_propagation_phase(gtk::PropagationPhase::Capture);
     let shortcut_tabs = tabs.each_ref().map(|tab| tab.downgrade());
     let weak_root = root.downgrade();
     let weak_window = window.downgrade();
+    let history_status = status.downgrade();
+    let history_pages = pages.downgrade();
     keys.connect_key_pressed(move |_, key, _, modifiers| {
         use gtk::gdk::{Key, ModifierType};
         if !modifiers.contains(ModifierType::CONTROL_MASK)
             || modifiers.intersects(
                 ModifierType::SHIFT_MASK | ModifierType::ALT_MASK | ModifierType::SUPER_MASK,
             )
-            || !weak_root.upgrade().is_some_and(|root| root.can_focus())
+            || !weak_root
+                .upgrade()
+                .is_some_and(|root| root.is_mapped() && root.can_focus())
         {
             return gtk::glib::Propagation::Proceed;
         }
-        if matches!(key, Key::z | Key::Z | Key::Cyrillic_ya | Key::Cyrillic_YA) {
+        let redo = matches!(key, Key::y | Key::Y | Key::Cyrillic_en | Key::Cyrillic_EN);
+        if redo || matches!(key, Key::z | Key::Z | Key::Cyrillic_ya | Key::Cyrillic_YA) {
             let editing = weak_window
                 .upgrade()
-                .and_then(|window| gtk::prelude::GtkWindowExt::focus(&window))
-                .is_some_and(|focus| focus.is::<gtk::Editable>() || focus.is::<gtk::TextView>());
-            return if !editing && undo.restore() {
-                gtk::glib::Propagation::Stop
-            } else {
-                gtk::glib::Propagation::Proceed
-            };
+                .and_then(|w| gtk::prelude::GtkWindowExt::focus(&w))
+                .is_some_and(|w| w.is::<gtk::Editable>() || w.is::<gtk::TextView>());
+            if !editing
+                && let (Some(model), Some(status), Some(pages)) = (
+                    model.as_ref(),
+                    history_status.upgrade(),
+                    history_pages.upgrade(),
+                )
+            {
+                match model.travel(redo) {
+                    Ok(true) => {
+                        undo.clear();
+                        refresh_records(&pages);
+                        notify(
+                            &status,
+                            if redo {
+                                "Действие повторено"
+                            } else {
+                                "Действие отменено"
+                            },
+                        );
+                    }
+                    Ok(false) => return gtk::glib::Propagation::Proceed,
+                    Err(e) => notify(&status, &e),
+                }
+                return gtk::glib::Propagation::Stop;
+            }
         }
         let index = match key {
             Key::_1 | Key::KP_1 => 0,
@@ -301,17 +457,23 @@ fn build_window(app: &adw::Application) {
     window.connect_destroy(move |_| {
         let _ = &data_guard;
     });
-    tutorial::install(
-        &window,
-        &overlay,
-        &scroll,
-        &pages,
-        tabs,
-        &status,
-        schedule_calendar.is_some(),
-    );
-    window.present();
-    renderer::record_actual(&window);
+    let tutorial = std::cell::Cell::new(Some(tabs));
+    let weak_window = window.downgrade();
+    let offer_tutorial = schedule_calendar.is_some();
+    overlay.connect_map(move |overlay| {
+        if let (Some(window), Some(tabs)) = (weak_window.upgrade(), tutorial.take()) {
+            tutorial::install(
+                &window,
+                overlay,
+                &scroll,
+                &pages,
+                tabs,
+                &status,
+                offer_tutorial,
+            );
+        }
+    });
+    overlay
 }
 
 fn brand_logo() -> gtk::DrawingArea {
@@ -371,7 +533,7 @@ fn margins(widget: &impl IsA<gtk::Widget>, size: i32) {
 
 fn page(title: &str) -> gtk::Box {
     let page = column(32);
-    page.append(&text(title, "title"));
+    page.append(&text(title, "page-title"));
     page
 }
 
@@ -411,7 +573,23 @@ fn notify(status: &gtk::Label, message: &str) {
     status.set_visible(true);
 }
 
+fn refresh_records(pages: &gtk::Stack) {
+    for name in ["schedule", "homework"] {
+        if let Some(page) = pages.child_by_name(name) {
+            let _ = page.activate_action("records.refresh", None);
+        }
+    }
+}
+
 fn confirm_delete(status: &gtk::Label, heading: &str, body: &str, confirm: impl Fn() + 'static) {
+    if !settings::display().confirm_delete {
+        confirm();
+        return;
+    }
+    confirm_removal(status, heading, body, confirm);
+}
+
+fn confirm_removal(status: &gtk::Label, heading: &str, body: &str, confirm: impl Fn() + 'static) {
     let Some(parent) = status
         .root()
         .and_then(|root| root.downcast::<gtk::Window>().ok())
@@ -455,4 +633,43 @@ fn confirm_delete(status: &gtk::Label, heading: &str, body: &str, confirm: impl 
     forms::dialog_keys(&window, &cancel, None);
     window.present();
     cancel.grab_focus();
+}
+
+fn reminders(app: &adw::Application, items: lessons::Lessons) {
+    let weak = app.downgrade();
+    let mut previous = chrono::Local::now().naive_local();
+    let mut sent = std::collections::HashSet::new();
+    gtk::glib::timeout_add_seconds_local(30, move || {
+        let Some(app) = weak.upgrade().filter(|app| app.active_window().is_some()) else {
+            return gtk::glib::ControlFlow::Break;
+        };
+        let now = chrono::Local::now().naive_local();
+        if now.date() != previous.date() {
+            sent.clear();
+        }
+        if settings::display().reminders
+            && now > previous
+            && now - previous < chrono::Duration::seconds(90)
+        {
+            for item in items
+                .on_date(now.date())
+                .iter()
+                .filter(|l| !l.options.cancelled)
+            {
+                let event = item.date.and_time(item.time) - chrono::Duration::minutes(5);
+                if event > previous && event <= now && sent.insert(item.id) {
+                    let message = gtk::gio::Notification::new("Урок через 5 минут");
+                    let subject = if item.options.replacement.is_empty() {
+                        &item.title
+                    } else {
+                        &item.options.replacement
+                    };
+                    message.set_body(Some(subject));
+                    app.send_notification(Some(&item.id.to_string()), &message);
+                }
+            }
+        }
+        previous = now;
+        gtk::glib::ControlFlow::Continue
+    });
 }

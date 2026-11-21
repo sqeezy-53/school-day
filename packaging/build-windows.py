@@ -248,7 +248,7 @@ def build(args, downloads, stage, output):
             archive.add(path, arcname=path.name)
     snapshot = stage / "source"
     snapshot.mkdir()
-    for name in ("src", "packaging", "docs", "Cargo.toml", "Cargo.lock", "build.rs", "README.md", "LICENSE"):
+    for name in ("src", "crates", "packaging", "docs", "Cargo.toml", "Cargo.lock", "build.rs", "README.md", "LICENSE"):
         source = PROJECT / name
         if source.is_dir():
             shutil.copytree(source, snapshot / name, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
