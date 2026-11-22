@@ -205,6 +205,14 @@ fn settings_form(
     page.append(&class_error);
 
     let theme = gtk::DropDown::from_strings(&["Светлая", "Тёмная"]);
+    let mut child = theme.first_child();
+    while let Some(widget) = child {
+        if let Ok(popover) = widget.clone().downcast::<gtk::Popover>() {
+            popover.set_offset(-12, 0);
+            break;
+        }
+        child = widget.next_sibling();
+    }
     theme.set_widget_name("settings-theme");
     crate::forms::guard_wheel(&theme);
 
