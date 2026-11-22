@@ -1,3 +1,5 @@
+//код отвечает за настройки звонков
+
 use adw::prelude::*;
 use chrono::{NaiveTime, Timelike};
 use std::cell::{Cell, RefCell};
