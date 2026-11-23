@@ -42,7 +42,7 @@ button.primary:hover { background: alpha(@window_fg_color, 0.15); }
 entry { background: @view_bg_color; color: @view_fg_color; border: 1px solid alpha(@window_fg_color, 0.15); padding: 8px 10px; border-radius: 6px; }
 entry:focus-within { border-color: alpha(@window_fg_color, 0.55); }
 .form-error { color: @error_color; }
-.homework-editor { border: 1px solid alpha(@window_fg_color, 0.15); border-radius: 6px; }
+.homework-editor { border: 1px solid alpha(@window_fg_color, 0.15); border-radius: 10px; }
 .homework-editor:focus-within { border-color: alpha(@window_fg_color, 0.55); }
 .undo-bar { padding: 8px 16px; border-top: 1px solid alpha(@window_fg_color, 0.15); background: @headerbar_bg_color; }
 .status { opacity: 0.80; padding-top: 12px; border-top: 1px solid alpha(@window_fg_color, 0.10); }
