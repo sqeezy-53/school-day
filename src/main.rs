@@ -111,7 +111,6 @@ fn build_window(app: &adw::Application) {
         let animated = startup::show(&stack);
         if animated {
             window.present();
-            renderer::record_actual(&window);
         }
         let weak = window.downgrade();
         drop(window);
@@ -136,7 +135,6 @@ fn build_window(app: &adw::Application) {
         stack.add_named(&workspace, Some(startup::WORKSPACE));
         if !animated {
             window.present();
-            renderer::record_actual(&window);
         }
     });
 }

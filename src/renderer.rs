@@ -1,5 +1,3 @@
-use adw::prelude::*;
-
 const CAIRO: &str = "cairo";
 
 /// Apply the renderer before creating the GTK application or acquiring any data locks.
@@ -33,10 +31,4 @@ pub fn prepare() -> std::io::Result<()> {
     }
 
     Ok(())
-}
-
-pub fn record_actual(window: &adw::ApplicationWindow) {
-    if let Some(renderer) = window.renderer() {
-        eprintln!("Графический рендерер: {}", renderer.type_().name());
-    }
 }
