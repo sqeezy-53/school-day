@@ -1,3 +1,4 @@
+//отвечает за создание разлчиных форм
 use adw::prelude::*;
 use gtk::gdk::{Key, ModifierType};
 use gtk::glib::Propagation;
