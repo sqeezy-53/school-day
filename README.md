@@ -23,7 +23,7 @@
 ## Установка
 
 - **Windows 10/11 x64** · [Установщик](https://github.com/sqeezy-53/school-day/releases/latest)
-- **Linux x86-64 с Flatpak** · [Выпуски Flatpak](https://github.com/sqeezy-53/school-day-flatpak/releases) · [Пакет 0.6.2](https://github.com/sqeezy-53/school-day/releases/download/v0.6.2/school-day-0.6.2-x86_64.flatpak)
+- **Linux x86-64 с Flatpak** · [Инструкция по установке и обновлению](https://github.com/sqeezy-53/school-day-flatpak#установка) · [Последний выпуск Flatpak](https://github.com/sqeezy-53/school-day-flatpak/releases/latest)
 - **Android 8.0 и новее** · [Выпуски Android](https://github.com/sqeezy-53/school-day-android/releases)
 
 Для ПК ориентир по памяти 4 ГБ, процессор x86-64 с двумя ядрами.
